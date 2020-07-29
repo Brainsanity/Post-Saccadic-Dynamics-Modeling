@@ -18,6 +18,15 @@ function synthesizedParams = SynthesizeRFParams(obj, eccDegs, cellType)
     surroundPeakSensitivityFitStd = std( log10( obj.([cellType 'SurroundPeakSensitivityFunction'])(obj.([cellType 'SurroundPeakSensitivityParams']), obj.([cellType 'SurroundData'])('sensitivity').radiusDegs) ) - log10( obj.([cellType 'SurroundData'])('sensitivity').peakSensitivity ) );
     surroundCenterPeakSensitivityRatios = surroundPeakSensitivities./centerPeakSensitivities;
 
+    % center/surround radius ratio according to Fig. 4C;
+    % surround/center peak sensitivity ratio according to Fig. 6
+    if( cellType == 'P' )
+        maxCenterSurroundRadiusRatio = 0.38;
+        maxSurroundCenterPeakSensitivityRatio = 0.12;
+    else
+        maxCenterSurroundRadiusRatio = 0.75;
+        maxSurroundCenterPeakSensitivityRatio = 0.44;
+    end
     
     maxAttemptsNo = 1000;
     % pW = 0.15;                      %%%%%% YB. Why 0.15? %%%%%%
@@ -43,7 +52,8 @@ function synthesizedParams = SynthesizeRFParams(obj, eccDegs, cellType)
               (integratedSurroundToCenterSensitivityRatio>0.9)) || ...
               (centerRadii(rfUnit) <= 0) || (centerPeakSensitivities(rfUnit) <= 0) || ...
               (surroundRadii(rfUnit) <= 0) || (surroundPeakSensitivities(rfUnit) <= 0) || ...
-              centerRadii(rfUnit) >= surroundRadii(rfUnit) )
+              centerRadii(rfUnit)/surroundRadii(rfUnit) > maxCenterSurroundRadiusRatio || ...
+              surroundPeakSensitivities(rfUnit)/centerPeakSensitivities(rfUnit) > maxSurroundCenterPeakSensitivityRatio )
               
             
             [centerRadii(rfUnit), centerPeakSensitivities(rfUnit), surroundRadii(rfUnit), surroundPeakSensitivities(rfUnit)] = drawSurroundAgain(obj, cellType, centerRadiusFitStd, surroundRadiusFitStd, centerPeakSensitivityFitStd, surroundPeakSensitivityFitStd, eccDegs(rfUnit), centerSurroundRadiusRatios(rfUnit), surroundCenterPeakSensitivityRatios(rfUnit));
