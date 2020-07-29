@@ -70,7 +70,7 @@ classdef CronerKaplanRGCModel < handle
             p.addParameter('generateAllFigures', false, @islogical);
             p.addParameter('instantiatePlotLab', false, @islogical);
             p.addParameter('dataSetToFit', 'medians', @(x)(ismember(x, {'medians', 'raw', 'paperFormulas'})));
-            p.addParameter('fitIntercept', true, @islogical);
+            p.addParameter('fitIntercept', false, @islogical);
             p.addParameter('randomizeCenterRadii', true, @islogical);
             p.addParameter('randomizeCenterSensitivities', true, @islogical);
             p.addParameter('randomizeSurroundRadii', true, @islogical);
