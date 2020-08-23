@@ -8,14 +8,18 @@ function [fr, fr_c, fr_s] = LinearResponse(obj, stimulus, inputX, inputY, eyeX, 
 	%  rfParams:	structure array containing RF parameters
     %  rfX:			horizontal locations of RF centers (degree)
     %  rfY:			vertical locations of RF centers (degree)
+    %
+    %  fr:          net linear response; 1st dimension for neurons, 2nd dimension for eye positions
+    %  fr_c:        center linear response; 1st dimension for neurons, 2nd dimension for eye positions
+    %  fr_s:        surround linear response; 1st dimension for neurons, 2nd dimension for eye positions
     
     inputX = inputX(:);     % column vector
     inputY = inputY(:);
 
-    r_c_sq = rfParams.centerRadii(:).^2;
-    K_c = rfParams.centerPeakSensitivities(:);
-    r_s_sq = rfParams.surroundRadii(:).^2;
-    K_s = rfParams.surroundPeakSensitivities(:);
+    r_c_sq = cat(1, rfParams.centerRadii).^2;
+    K_c = cat(1, rfParams.centerPeakSensitivities);
+    r_s_sq = cat(1, rfParams.surroundRadii).^2;
+    K_s = cat(1, rfParams.surroundPeakSensitivities);
 
     %% method 1
     % [x, y] = meshgrid(inputX, inputY);
@@ -48,10 +52,11 @@ function [fr, fr_c, fr_s] = LinearResponse(obj, stimulus, inputX, inputY, eyeX, 
     % eyeX = repmat( eyeX(:)', nNeurons, 1 );
     % eyeY = repmat( eyeY(:)', nNeurons, 1 );
 
-    % r_s_sq_5 = 10^2 * r_s_sq/2;      % +-5 std
+    % n = 10;
+    % r_s_sq_n = 10^2 * r_s_sq/2;      % +-n std
     % parfor( k = 0 : nNeurons * nEyePos-1 )
     %     distSq = (inputX' - (rfX(k) + eyeX(k))).^2 + (inputY - (rfY(k) + eyeY(k))).^2;
-    %     idx = distSq(:) <= r_s_sq_5(k);     % within +-5 std; column vector
+    %     idx = distSq(:) <= r_s_sq_n(k);     % within +-5 std; column vector
     %     fr_c(k) = K_c(k) * exp( -distSq(idx') / r_c_sq(k) ) * (stimulus(idx) .* areas(idx));
     %     fr_s(k) = - K_s(k) * exp( -distSq(idx') / r_s_sq(k) ) * (stimulus(idx) .* areas(idx));
     % end
@@ -59,14 +64,28 @@ function [fr, fr_c, fr_s] = LinearResponse(obj, stimulus, inputX, inputY, eyeX, 
 
     
     %% method 3
-    r_s_sq_5 = 10^2 * r_s_sq/2;      % +-5 std
+    n = 6;
+    r_s_n = n * cat(1, rfParams.surroundRadii) / sqrt(2);
+    r_s_sq_n = n^2 * r_s_sq/2;      % +-n std
     parfor( k = 0 : nNeurons * nEyePos-1 )
         iEyePos = floor(k/nNeurons) + 1;
         iNeuron = mod(k,nNeurons) + 1;
-        distSq = (inputX' - (rfX(iNeuron) + eyeX(iEyePos))).^2 + (inputY - (rfY(iNeuron) + eyeY(iEyePos))).^2;
-        idx = distSq(:) <= r_s_sq_5(iNeuron);     % within +-5 std; column vector
-        fr_c(k+1) = K_c(iNeuron) * exp( -distSq(idx') / r_c_sq(iNeuron) ) * (stimulus(idx) .* areas(idx));
-        fr_s(k+1) = - K_s(iNeuron) * exp( -distSq(idx') / r_s_sq(iNeuron) ) * (stimulus(idx) .* areas(idx));
+
+        % % circular area
+        % distSq = (inputX' - (rfX(iNeuron) + eyeX(iEyePos))).^2 + (inputY - (rfY(iNeuron) + eyeY(iEyePos))).^2;
+        % idx = distSq(:) <= r_s_sq_n(iNeuron);     % within +-n std; column vector
+        % fr_c(k+1) = K_c(iNeuron) * exp( -distSq(idx') / r_c_sq(iNeuron) ) * (stimulus(idx) .* areas(idx));
+        % fr_s(k+1) = - K_s(iNeuron) * exp( -distSq(idx') / r_s_sq(iNeuron) ) * (stimulus(idx) .* areas(idx));
+
+        % square area
+        dX = inputX' - (rfX(iNeuron) + eyeX(iEyePos));
+        dY = inputY - (rfY(iNeuron) + eyeY(iEyePos));
+        idxX = abs(dX) <= r_s_n(iNeuron);
+        idxY = abs(dY) <= r_s_n(iNeuron);
+        idx = idxX & idxY;
+        distSq = dX(idxX).^2 + dY(idxY).^2;
+        fr_c(k+1) = K_c(iNeuron) * exp( -distSq(:)' / r_c_sq(iNeuron) ) * (stimulus(idx) .* areas(idx));
+        fr_s(k+1) = - K_s(iNeuron) * exp( -distSq(:)' / r_s_sq(iNeuron) ) * (stimulus(idx) .* areas(idx));
     end
     %% end method 3
 

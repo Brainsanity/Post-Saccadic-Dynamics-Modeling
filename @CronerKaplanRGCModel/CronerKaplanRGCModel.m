@@ -109,6 +109,7 @@ classdef CronerKaplanRGCModel < handle
 
         % Method to calculate response to given input of spatial RFs with specified parameters and RF locations
         [fr, fr_c, fr_s] = LinearResponse(obj, stimulus, inputX, inputY, eyeX, eyeY, rfParams, rfX, rfY);
+        sensitivity = SpatialSensitivity(obj, rfParams, SFs);
 
         % Method to display synthesized parameters
         DisplaySynthesizedRFParams(obj);

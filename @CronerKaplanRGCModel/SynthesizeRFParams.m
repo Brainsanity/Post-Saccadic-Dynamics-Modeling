@@ -1,7 +1,8 @@
 function synthesizedParams = SynthesizeRFParams(obj, eccDegs, cellType)
-    % cellType:     P (midget) or M (parasol) cell
+    % cellType:     POn/POff (midget) or MOn/MOff (parasol) cell
 
-    cellType = upper(cellType);
+    OnOff = cellType(2:end);
+    cellType = upper(cellType(1));
 
     rng('shuffle');
     
@@ -30,7 +31,7 @@ function synthesizedParams = SynthesizeRFParams(obj, eccDegs, cellType)
     
     maxAttemptsNo = 1000;
     % pW = 0.15;                      %%%%%% YB. Why 0.15? %%%%%%
-    pW = 0.164;                   %%%%%% YB. 3*std of regression error in Figure 11 %%%%%%
+    pW = 0.164;                   %%%%%% YB. std of regression error in Figure 11 %%%%%%
     
     % Synthesize params for each rfUnit
     parfor rfUnit = 1:numel(eccDegs)
@@ -75,13 +76,28 @@ function synthesizedParams = SynthesizeRFParams(obj, eccDegs, cellType)
     assert(all(surroundRadii>0), 'Found surround radii < 0');
     assert(all(centerRadii>0), 'Found center radii < 0');
     
-    synthesizedParams = struct(...
-        'eccDegs', eccDegs, ...
-        'centerRadii', centerRadii, ...
-        'surroundRadii', surroundRadii, ...
-        'centerPeakSensitivities', centerPeakSensitivities, ...
-        'surroundPeakSensitivities', surroundPeakSensitivities ...
-        );
+    % synthesizedParams = struct(...
+    %     'eccDegs', eccDegs, ...
+    %     'centerRadii', centerRadii, ...
+    %     'surroundRadii', surroundRadii, ...
+    %     'centerPeakSensitivities', centerPeakSensitivities, ...
+    %     'surroundPeakSensitivities', surroundPeakSensitivities ...
+    %     );
+    if( strcmpi( OnOff, 'off' ) )
+        centerPeakSensitivities = -centerPeakSensitivities;
+        surroundPeakSensitivities = -surroundPeakSensitivities;
+    end
+    synthesizedParams(numel(eccDegs)).eccDegs = [];
+    eccDegs = num2cell(eccDegs);
+    centerRadii = num2cell(centerRadii);
+    surroundRadii = num2cell(surroundRadii);
+    centerPeakSensitivities = num2cell(centerPeakSensitivities);
+    surroundPeakSensitivities = num2cell(surroundPeakSensitivities);
+    [synthesizedParams.eccDegs] = eccDegs{:};
+    [synthesizedParams.centerRadii] = centerRadii{:};
+    [synthesizedParams.surroundRadii] = surroundRadii{:};
+    [synthesizedParams.centerPeakSensitivities] = centerPeakSensitivities{:};
+    [synthesizedParams.surroundPeakSensitivities] = surroundPeakSensitivities{:};
 
 end
 

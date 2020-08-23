@@ -243,7 +243,7 @@ classdef RGC < handle
         end
 
 
-        function [FR, tRF ] = TemporalLinearModel( input, cellType, specifier )
+        function [FR, tRF ] = TemporalLinearModel( input, cellType, specifier, c )
         	%% From Benardete & Kaplan, JPhy, 1999 (P cells); and Benardete & Kaplan, VisNeuro, 1999 (M cells)
         	%  input:			firing rate resulted from spatial receptive field
         	%  cellType:		P cell or M cell
@@ -279,7 +279,7 @@ classdef RGC < handle
 		            D = 2.2/1000;   % s
 		            N_L = 30.30;
 		            Tau_L = 1.41/1000;  % s
-		            H_S = 1;%0.98;        % H_S = 1 makes the summation of the kernel be zero
+		            H_S = 0.98;        % H_S = 1 makes the summation of the kernel be zero
 		            Tau_0 = 54.6/1000;  % s
 		            C_half = 0.056;
 		        elseif( strcmpi( specifier, 'off' ) )
@@ -294,7 +294,7 @@ classdef RGC < handle
             		return;
             	end
             	N_H = 1;
-            	c = 0.4;	% contrast
+            	% c = 0.04;	% contrast
             	Tau_H = Tau_0 / ( 1 + (c/C_half)^2 );	% s
             
             else
@@ -312,15 +312,15 @@ classdef RGC < handle
 
             if(isempty(input)) return; end
 
-            FR = conv( input, tRF );
+            FR = conv( input, tRF ) * (1/sRate);
             FR = FR(1:size(input,2));
 
         end
 
 
-        function senseProfile = TemporalFreqGainProfile( sFreqs, cellType, specifier )
+        function senseProfile = TemporalFreqGainProfile( tFreqs, cellType, specifier, c )
             %% From Benardete & Kaplan, JPhy, 1999 (P cells); and Benardete & Kaplan, VisNeuro, 1999 (M cells)
-            %  sFreqs:          Temporal frequencies
+            %  tFreqs:          Temporal frequencies
             %  cellType:        P cell or M cell
             %  specifier:       ON cell or OFF cell when cellType is M; center or surround when cellType is P
 
@@ -369,14 +369,14 @@ classdef RGC < handle
                     return;
                 end
                 N_H = 1;
-                c = 0.4;    % contrast
+                % c = 0.4;    % contrast
                 Tau_H = Tau_0 / ( 1 + (c/C_half)^2 );   % s
             
             else
                 return;
             end
 
-            w = 2*pi * sFreqs;
+            w = 2*pi * tFreqs;
             senseProfile = abs( A * exp( -i*w*D ) .* ( 1 - H_S ./ (1 + i*w*Tau_H) ).^N_H .* ( 1 ./ (1 + i*w*Tau_L) ).^N_L );
         end
 
