@@ -52,16 +52,21 @@ classdef Encoder < handle
 		end
 
 
-		function [LFR, time, conditions, sFR, sFR_c, sFR_s, trials, trialsIdx, cellIdx] = ExampleCells(obj, dataFolder, alignEvent, contrast)
+		function [LFR, time, conditions, sFR, sFR_c, sFR_s, trials, trialsIdx, cellIdx, nCells, nCellsUsed] = ExampleCells(obj, dataFolder, alignEvent, contrast, stabilize)
 			%% Show example modeled cells at locations (0,0), (0,4), (0,8), (0,12)
 			%   dataFolder:			folder containing experiment data and noise background
 			%	alignEvent:			'saccadeOn', 'saccadeOff', 'flashOn'
+			%   contrast:			contrast of grating
+			%   stabilize:			'normal' (no stabilization), 'drift' (only stabilize drift), or 'full' (full stabilization)
 
-			if( nargin() < 1 || isempty(dataFolder) )
+			if( nargin() < 2 || isempty(dataFolder) )
 				dataFolder = '../../data/';
 			end
-			if( nargin() < 2 || isempty(alignEvent) )
-				alignEvent = 'saccadeOff';
+			if( nargin() < 3 || isempty(alignEvent) )
+				alignEvent = 'saccadeOff'; %'saccadeLand';%
+			end
+			if( nargin() < 5 || isempty(stabilize) )
+				stabilize = 'normal';
 			end
 
 			trials = obj.LoadExpData(dataFolder);
@@ -74,15 +79,18 @@ classdef Encoder < handle
 					d2 = sum( obj.layers(iL).locations.^2, 2 );
 					if( eccs(iEcc) == 0 )
 						cellIdx{iL,iEcc} = find( d2 <= trials(1).gratingWidth^2 & index );
+						nCells{iL,iEcc} = sum( d2 <= trials(1).gratingWidth^2 );
 					else
 						w = trials(1).gratingWidth/2;
 						cellIdx{iL,iEcc} = find( (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2 & index );
+						nCells{iL,iEcc} = sum( (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2 );
 					end
 					cellIdx{iL,iEcc} = cellIdx{iL,iEcc}( randperm( size(cellIdx{iL,iEcc}, 1) ) );
+					nCellsUsed{iL,iEcc} = round( nCells{iL,iEcc} / 100 );
 					% [~, cellIdx(iL,iEcc)] = min( sum( (obj.layers(iL).locations - cLocs(iEcc,:)).^2, 2 ) );
 				end
 			end
-			nCells = 30;
+			% nCells = 30;
             nTrials = 30;
 
 
@@ -107,13 +115,15 @@ classdef Encoder < handle
 
 			conditions = struct( ...
 							'eccentricity',	{  0,   4,   8,  12,   0,   4,   8,  12,   0,   4,   8,  12}, ...
-							'sf',			{  0,   0,   0,   0,   2,   2,   2,   2,  10,  10,  10,  10}, ...
+							'sf',			{  2,   2,   2,   2,   2,   2,   2,   2,  10,  10,  10,  10}, ...
 							'duration',		{500}, ...
 							'present',		{  0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,   1}, ...
 							'alignEvent',	{alignEvent} );
+			conditions([4:4:end]) = [];
+			Eccs = unique([conditions.eccentricity]);
 
 			for( iCond = size(conditions,2) : -1 : 1 )
-				iEcc = find( conditions(iCond).eccentricity == [0, 4, 8, 12] );
+				iEcc = find( conditions(iCond).eccentricity == Eccs );
 
 				trialsIdx{iCond} = find( ... 
 										 ...%[trials.eccentricity] == eccs(1,iEcc) & ...
@@ -124,73 +134,94 @@ classdef Encoder < handle
 				idx = trialsIdx{iCond};    %fprintf('nTrials = %d\n', size(idx,2)); continue;
                 idx = idx( 1 : min(nTrials,end) );
 				tMax = round(max( [trials(idx).saccadeOff] + round(conditions(iCond).duration/1000*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));	% in samples
-				tMin = round(min( [trials(idx).saccadeOn] - round(0.300*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));				% in samples
-				sfr = zeros( nCells, tMax-tMin+1, size(idx,2), 4 );		% 1st dim: neurons;		2nd dim: time;		3rd dim: trials;	4th dim: layers
-				sfr_c = sfr;
-				sfr_s = sfr;
-				tfr = sfr;
+				tMin = round(min( [trials(idx).saccadeOn] - round(0.150*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));				% in samples
+				for( iL = 4 : -1 : 1 )
+					sFR{iCond,iL} = zeros( nCellsUsed{iL,iEcc}, tMax-tMin+1, size(idx,2) );		% 1st dim: neurons;		2nd dim: time;		3rd dim: trials;
+				end
+				sFR_c{iCond,iL} = sFR{iCond,iL};
+				sFR_s{iCond,iL} = sFR{iCond,iL};
+				LFR{iCond,iL} = sFR{iCond,iL};
 				for( k = size(idx,2) : -1 : 1 )
-					tic;
-					x  = trials(idx(k)).x.position / 60;
-					y  = trials(idx(k)).y.position / 60;
+					% tic;
+					index = tMin + trials(idx(k)).(alignEvent) : min( size(trials(idx(k)).x.position,2), tMax + trials(idx(k)).(alignEvent) );
+					x  = trials(idx(k)).x.position(index) / 60;
+					y  = trials(idx(k)).y.position(index) / 60;
                     
-					% before grating
-					eyeIdx1 = tMin + trials(idx(k)).(alignEvent) : trials(idx(k)).flashOn-1;
-					s1 = size(eyeIdx1,2);
+					% before saccade
+					eyeIdx{1} = 1 : trials(idx(k)).saccadeOn - trials(idx(k)).(alignEvent) - tMin;
+					s1 = size(eyeIdx{1},2);
 
-					% during grating
-					eyeIdx2 = trials(idx(k)).flashOn : min( size(x,2), tMax + trials(idx(k)).(alignEvent) );
-					s2 = size(eyeIdx2,2);
+					% during saccade
+					eyeIdx{2} = eyeIdx{1}(end) + ( 1 : trials(idx(k)).saccadeOff - trials(idx(k)).saccadeOn + 1 );
+					s2 = size(eyeIdx{2},2);
+
+					% after saccade
+					eyeIdx{3} = eyeIdx{2}(end)+1 : size(x,2);
+					s3 = size(eyeIdx{3},2);
+
+					if( strcmpi( stabilize, 'drift' ) )
+						x(eyeIdx{1}) = x(eyeIdx{1}(end));
+						y(eyeIdx{1}) = y(eyeIdx{1}(end));
+						x(eyeIdx{3}) = x(eyeIdx{3}(1));
+						y(eyeIdx{3}) = y(eyeIdx{3}(1));
+					elseif( strcmpi( stabilize, 'full' ) )
+						x(:) = x(eyeIdx{3}(1));
+						y(:) = y(eyeIdx{3}(1));
+					end
 
                     [noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(idx(k)).backgroundImage), trials(idx(k)).pixelAngle/60 );
 					grating = obj.GenerateGrating( conditions(iCond).eccentricity, trials(idx(k)).gratingWidth, conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60 );
 					noise = noise * trials(idx(k)).backgroundContrast;
 					grating = grating * contrast * conditions(iCond).present;
                     bg = 1;
+					stimulus = noise + grating;
                     
 					% avContrast = ((s1+s2)*trials(idx(k)).backgroundContrast + s2*contrast*conditions(iCond).present) / (s1+s2);
 					avContrast = trials(idx(k)).backgroundContrast;
 					% contrastF = [ zeros(1,s1), ones(1,s2) * contrast ] + trials(idx(k)).backgroundContrast;
 					% contrastF = obj.ComputeContrasts( noise+grating+bg,  inputX, inputY, obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),2), [obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCells)).surroundRadii], x([eyeIdx1,eyeIdx2]), y([eyeIdx1,eyeIdx2]) );
-					contrastF = contrast;
+					contrastF = 1;%contrast;
 
 					for( iL = 1:4 )
-						xIdx = min(x([eyeIdx1,eyeIdx2])) + min(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),1)) - 4 <= inputX & inputX <= max(x([eyeIdx1,eyeIdx2])) + max(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),1)) + 4; %720 : 1460;
-	                    yIdx = min(y([eyeIdx1,eyeIdx2])) + min(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),2)) - 4 <= inputY & inputY <= max(y([eyeIdx1,eyeIdx2])) + max(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),2)) + 4; %300 : 780;
+						tic;
+						for( m = 1 : 3 )
+							xIdx = min(x(eyeIdx{m})) + min(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1)) - 4 <= inputX & inputX <= max(x(eyeIdx{m})) + max(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1)) + 4; %720 : 1460;
+		                    yIdx = min(y(eyeIdx{m})) + min(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2)) - 4 <= inputY & inputY <= max(y(eyeIdx{m})) + max(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2)) + 4; %300 : 780;
 	                    
-						[sfr(:,s1+(1:s2),k,iL), sfr_c(:,s1+(1:s2),k,iL), sfr_s(:,s1+(1:s2),k,iL)] = obj.SpatialModel.LinearResponse( noise(yIdx,xIdx)+grating(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx2), y(eyeIdx2), obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCells)), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),2));
-						[sfr(:,1:s1,k,iL), sfr_c(:,1:s1,k,iL), sfr_s(:,1:s1,k,iL)] = obj.SpatialModel.LinearResponse( noise(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx1), y(eyeIdx1), obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCells)), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),2));
-
-						if( lower(obj.layers(iL).name(1)) == 'm' )
-							tfr(:,:,k,iL) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(cellIdx{iL,iEcc}(1:nCells)), avContrast, trials(idx(k)).sRate, contrastF .* sfr(:,:,k,iL) );
-						else
-							tfr(:,:,k,iL) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(cellIdx{iL,iEcc}(1:nCells)), avContrast, trials(idx(k)).sRate, contrastF .* sfr_c(:,:,k,iL), contrastF .* sfr_s(:,:,k,iL) );
+							[sFR{iCond,iL}(:,eyeIdx{m},k), sFR_c{iCond,iL}(:,eyeIdx{m},k), sFR_s{iCond,iL}(:,eyeIdx{m},k)] = obj.SpatialModel.LinearResponse( stimulus(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx{m}), y(eyeIdx{m}), obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2));
 						end
+						if( lower(obj.layers(iL).name(1)) == 'm' )
+							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), avContrast, trials(idx(k)).sRate, contrastF .* sFR{iCond,iL}(:,:,k) );
+						else
+							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), avContrast, trials(idx(k)).sRate, contrastF .* sFR_c{iCond,iL}(:,:,k), contrastF .* sFR_s{iCond,iL}(:,:,k) );
+						end
+						fprintf('Ecc=%d, SF=%d, Dur=%d, Present=%d, iL=%d, iTrials=%d/%d, t=%f\n', conditions(iCond).eccentricity, conditions(iCond).sf, conditions(iCond).duration, conditions(iCond).present, iL, k, size(idx,2), toc);
 					end
-					fprintf('Ecc=%d, SF=%d, Dur=%d, Present=%d, iTrials=%d/%d, t=%f\n', conditions(iCond).eccentricity, conditions(iCond).sf, conditions(iCond).duration, conditions(iCond).present, k, size(idx,2), toc);
+					
 				end
-				sFR{iCond} = sfr;
-				sFR_c{iCond} = sfr_c;
-				sFR_s{iCond} = sfr_s;
-				LFR{iCond} = tfr;
 				if(isempty(idx))
 					time{iCond} = [];
 				else
 					time{iCond} = (tMin:tMax) / trials(idx(1)).sRate * 1000;
 				end
-			end
+            end
+            
+            save( fullfile( dataFolder, 'figures', sprintf( 'Example Cells LFR; contrast = %f.mat', contrast ) ), 'LFR', 'time', 'conditions', 'sFR', 'sFR_c', 'sFR_s', 'trials', 'trialsIdx', 'cellIdx' );
 		end
 
 
-		function DisplayExampleCells(obj, FR, time, conditions, alignEvent, trials, trialsIdx, cellIdx)
+		function DisplayExampleCells(obj, FR, time, conditions, alignEvent, trials, trialsIdx, cellIdx, applyRectify)
+			if( nargin() < 9 || isempty(applyRectify) )
+				applyRectify = true;
+			end
 
 
-			conditions = struct( ...
-							'eccentricity',	{  0,   4,   8,  12,   0,   4,   8,  12,   0,   4,   8,  12}, ...
-							'sf',			{  2,   2,   2,   2,   2,   2,   2,   2,  10,  10,  10,  10}, ...
-							'duration',		{500}, ...
-							'present',		{  0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,   1}, ...
-							'alignEvent',	{'flashOn'} );
+			% conditions = struct( ...
+			% 				'eccentricity',	{  0,   4,   8,  12,   0,   4,   8,  12,   0,   4,   8,  12}, ...
+			% 				'sf',			{  2,   2,   2,   2,   2,   2,   2,   2,  10,  10,  10,  10}, ...
+			% 				'duration',		{500}, ...
+			% 				'present',		{  0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,   1}, ...
+			% 				'alignEvent',	{'flashOn'} );
 			
 			% nTrials = size( FR{1}, 1 );
 			% nCells = size( FR{1}, 3 );
@@ -198,7 +229,9 @@ classdef Encoder < handle
 			nCells = size( FR{1}, 1 );
 			idx = trialsIdx{1}(1:nTrials);
 
-			nRows = size( unique([conditions.eccentricity]), 2 );
+			Eccs = unique([conditions.eccentricity]);
+
+			nRows = size( Eccs, 2 );
 			nCols = 1;
 
 			for( iL = 1 : 4 )
@@ -209,9 +242,10 @@ classdef Encoder < handle
 				pause(1);
 
 				colors = {'b', 'g', 'r'};
+				lineStyles = {'-', '-.', '--'};
 				names = {'Absent', '2 cpd', '10 cpd'};
 				for(iCond = 1 : size(conditions,2))
-					iEcc = find( conditions(iCond).eccentricity == [0 4 8 12] );
+					iEcc = find( conditions(iCond).eccentricity == Eccs );
 					iSF = find( conditions(iCond).sf == [2 10] );
 					iDur = find( conditions(iCond).duration == [500] );
 					iPre = find( conditions(iCond).present == [0 1] );
@@ -219,22 +253,31 @@ classdef Encoder < handle
 					subplot( nRows, nCols, (iEcc-1)*nCols + 1 ); hold on;
 					k = iSF + iPre - 1;
 					% fr = FR{iEcc,iSF,iDur,iPre}(:,:,iL);
-					fr = FR{iCond}(:,:,:,iL);
-					fr(fr<0) = 0;
+					tmpFR = FR{iCond,iL}(:,:,:);
+					if(applyRectify)
+						tmpFR(tmpFR<0) = 0;
+					end
+
+					tMin = max( round( time{iCond}(1)/1000*[trials(idx).sRate] ) + [trials(idx).(conditions(iCond).alignEvent)] - [trials(idx).(alignEvent)] );
+					tMax = min( round( time{iCond}(end)/1000*[trials(idx).sRate] ) + [trials(idx).(conditions(iCond).alignEvent)] - [trials(idx).(alignEvent)] );
+					fr = zeros( size(tmpFR,1), tMax-tMin+1, size(tmpFR,3) );
+					for( iTrial = 1 : nTrials )
+						s = find( time{iCond} >= round( ( trials(idx(iTrial)).(alignEvent) - trials(idx(iTrial)).(conditions(iCond).alignEvent) ) / trials((idx(iTrial))).sRate * 1000 ), 1, 'first' );
+						fr(:,:,iTrial) = tmpFR(:,s+(tMin:tMax),iTrial);
+					end
+
                     fr = mean( fr, 3 );
 					m = mean( fr, 1 );
 					sem = std( fr, [], 1 ) / sqrt(size(fr,1));
 
-					% t = time{iEcc,iSF,iDur,iPre};
-					t = time{iCond};
-
-					h(k) = plot( t, m, 'color', colors{k}, 'lineWidth', 2, 'displayName', names{k} );
+					t = (tMin:tMax) / trials(idx(1)).sRate * 1000;
+					h(k) = plot( t, m, 'color', colors{k}, 'LineStyle', lineStyles{k}, 'lineWidth', 2, 'displayName', names{k} );
 					fill( [t, t(end:-1:1)], [m-sem, m(end:-1:1)+sem(end:-1:1)], colors{k}, 'LineStyle', 'none', 'FaceAlpha', 0.2 );
 					if( k == 3 )
 						plot( [0 0], get(gca, 'ylim'), 'k--', 'lineWidth', 2 );
-						plot( [1 1] * mean([trials(idx).saccadeOn] - [trials(idx).flashOn]), get(gca, 'ylim'), 'b--', 'lineWidth', 2 );
-						plot( [1 1] * mean([trials(idx).saccadeOff] - [trials(idx).flashOn]), get(gca, 'ylim'), 'r--', 'lineWidth', 2 );
-						plot( [1 1] * mean([trials(idx).saccadeLand] - [trials(idx).flashOn]), get(gca, 'ylim'), 'm--', 'lineWidth', 2 );
+						h(4) = plot( [1 1] * mean([trials(idx).saccadeOn] - [trials(idx).(alignEvent)]), get(gca, 'ylim'), 'b--', 'lineWidth', 2, 'displayName', 'Mean SacOn' );
+						h(5) = plot( [1 1] * mean([trials(idx).saccadeLand] - [trials(idx).(alignEvent)]), get(gca, 'ylim'), 'm--', 'lineWidth', 2, 'displayName', 'Mean SacLand' );
+						% h(6) = plot( [1 1] * mean([trials(idx).saccadeOff] - [trials(idx).(alignEvent)]), get(gca, 'ylim'), 'r--', 'lineWidth', 2, 'displayName', 'Mean SacOff' );
 					end
 
 					if( iEcc == nRows && k == 3 )
@@ -261,7 +304,7 @@ classdef Encoder < handle
 			pause(1);
 
 			% saccadeOn - flashOn, saccadeOff - flashOn
-			subplot(3, 4, [1 2]); hold on;
+			subplot(3, 2, 1); hold on;
 			centers = -100:5:100;
 			data = hist( [trials(idx).saccadeOn] - [trials(idx).flashOn], centers );
 			bar( centers, data, 0.9, 'b', 'LineStyle', 'none', 'displayName', 'sacOn - flashOn' );
@@ -275,48 +318,48 @@ classdef Encoder < handle
 			set( gca, 'lineWidth', 2, 'fontsize', 16 );
 
 			% eye traces
-			subplot(3, 4, [3 4]); hold on;
+			subplot(3, 2, 2); hold on;
 			for( k = size(idx,2) : -1 : 1 )
-				x = trials(idx(k)).x.position( -100+trials(idx(k)).flashOn : min(end, 150+trials(idx(k)).flashOn) );
+				x = trials(idx(k)).x.position( -100+trials(idx(k)).saccadeLand : min(end, 100+trials(idx(k)).saccadeLand) );
 				eyeX( k, 1:size(x,2) ) = x;
 			end
 			m = mean( eyeX, 1 );
 			sd = std( eyeX, [], 1 );
-			plot( -100:150, m, 'b', 'lineWidth', 2 );
-			fill( [-100:150, 150:-1:-100], [m-sd, m(end:-1:1)+sd(end:-1:1)], 'b', 'LineStyle', 'none', 'FaceAlpha', 0.5 );
+			plot( -100:100, m, 'b', 'lineWidth', 2 );
+			fill( [-100:100, 100:-1:-100], [m-sd, m(end:-1:1)+sd(end:-1:1)], 'b', 'LineStyle', 'none', 'FaceAlpha', 0.5 );
 			plot( [0 0], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
-			xlabel('Time aligned to flashOn');
+			xlabel('Time aligned to saccadeLand');
 			ylabel('Horizontal eye (mean+-std) (arcmin)');
 			set( gca, 'lineWidth', 2, 'fontsize', 16 );
 
 			% cell spatial sensitivity function
 			colors = {[1 0 0], [0 0 1], 'm', 'c'};
-			sf = 0.1:0.1:20;
-			for(iEcc = 1:4)
-				subplot(3, 4, 4+iEcc); hold on; h = [];
+			sf = 0.1:0.1:40;
+			for(iEcc = 1:size(Eccs,2))
+				subplot(3, size(Eccs,2), size(Eccs,2)+iEcc); hold on; h = [];
 				for(iL = 1 : 4)
-					% idx = cellIdx(iL,iEcc);
-					idx = cellIdx{iL,iEcc};
+					nCells = size(FR{iEcc,iL},1);
+					idx = cellIdx{iL,iEcc}(1:nCells);
 					m = mean( abs( obj.SpatialModel.SpatialSensitivity( obj.layers(iL).sRFParams(idx), sf ) ), 1 );
 					sem = std( abs( obj.SpatialModel.SpatialSensitivity( obj.layers(iL).sRFParams(idx), sf ) ), [], 1 ) / sqrt(nCells);
 					h(iL) = plot( sf, m, 'color', colors{iL}, 'lineWidth', 2, 'displayName', obj.layers(iL).name );
 					fill( [sf, sf(end:-1:1)], [m-sem, m(end:-1:1)+sem(end:-1:1)], 'k', 'FaceColor', colors{iL}, 'LineStyle', 'none', 'FaceAlpha', 0.5 );
 				end
+				set( gca, 'xscale', 'log', 'yscale', 'log', 'lineWidth', 2, 'fontsize', 16 );
 				plot( [2 2], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
 				plot( [10 10], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
-				if(iEcc==4), legend(h); end
+				if(iEcc==nRows), legend(h); end
 				xlabel('Spatial frequency (CPD)');
 				if(iEcc==1), ylabel('Sensitivity'); end
 				title( sprintf('Ecc = %d', conditions(iEcc).eccentricity) );
-				set( gca, 'lineWidth', 2, 'fontsize', 16 );
 			end
 
 			% cell temporal sensitivity function
 			tf = 0.1:0.1:60;
-			for(iEcc = 1:4)
-				subplot(3, 4, 8+iEcc); hold on; h = [];
+			for(iEcc = 1:size(Eccs,2))
+				subplot(3, size(Eccs,2), size(Eccs,2)*2+iEcc); hold on; h = [];
 				for(iL = 1 : 4)
-					% idx = cellIdx(iL,iEcc);
+					nCells = size(FR{iEcc,iL},1);
 					idx = cellIdx{iL,iEcc}(1:nCells);
 					if( iL <= 2 )
 						[C, S] = obj.TemporalModel.TemporalSensitivity( obj.layers(iL).name, obj.layers(iL).tRFParams(idx), tf );
@@ -337,11 +380,434 @@ classdef Encoder < handle
 						fill( [tf, tf(end:-1:1)], [m-sem, m(end:-1:1)+sem(end:-1:1)], 'k', 'FaceColor', colors{iL}, 'LineStyle', 'none', 'FaceAlpha', 0.5 );
 					end
 				end
-				if(iEcc==4), legend(h); end
+				if(iEcc==nRows), legend(h); end
 				xlabel('Temporal frequency (Hz)');
 				if(iEcc == 1), ylabel('Sensitivity'); end
-				set( gca, 'lineWidth', 2, 'fontsize', 16 );
+				set( gca, 'xscale', 'log', 'yscale', 'log', 'lineWidth', 2, 'fontsize', 16 );
 			end
+		end
+
+
+		function fr = ExampleCells4TrialPredict(obj, FR, time, conditions, trials, trialsIdx, cellIdx, applyRectify, alignEvent, LBOffset, UBOffset, saveFolder)
+			if( nargin() < 9 || isempty(applyRectify) )
+				applyRectify = true;
+			end
+			if( nargin() < 12 )
+				saveFolder = [];
+			end
+
+			nTrials = size( FR{1}, 3 );
+			idx = trialsIdx{1}(1:nTrials);
+
+			Eccs = unique([conditions.eccentricity]);
+			nEccs = size(Eccs,2);
+
+			nRows = size( unique([conditions.eccentricity]), 2 );
+			nCols = 4;
+
+			fr = cell(size(conditions,2),5);
+			for( iL = 1 : 5 )
+				if( iL ~= 5 )
+					layerName = obj.layers(iL).name;
+				else
+					layerName = 'Layers Average';
+				end
+				figure( 'NumberTitle', 'off', 'name', sprintf('Example Cells : Trial-by-Trial Prediction : %s+[%d,%d] : %s', alignEvent, LBOffset, UBOffset, layerName), 'color', 'w' );
+				pause(0.1);
+				jf = get(handle(gcf),'javaframe');
+				jf.setMaximized(1);
+				pause(1);
+
+				colors = {'b', 'g', 'r'};
+				lineStyles = {'-', '-.', '--'};
+				names = {'Absent', '2 cpd', '10 cpd'};
+				for(iCond = 1 : size(conditions,2))
+					iEcc = find( conditions(iCond).eccentricity == Eccs );
+					iSF = find( conditions(iCond).sf == [2 10] );
+					iDur = find( conditions(iCond).duration == [500] );
+					iPre = find( conditions(iCond).present == [0 1] );
+					k = iSF + iPre - 1;
+
+					if( iL ~= 5 )
+						tmpFR = FR{iCond,iL}(:,:,:);
+						if(applyRectify)
+							tmpFR(tmpFR<0) = 0;
+                        end
+						
+                        fr{iCond,iL} = zeros(size(FR{iCond,iL},1), UBOffset - LBOffset + 1, nTrials);
+						for( iTrial = 1 : nTrials )
+							s = find( time{iCond} >= round( ( trials(idx(iTrial)).(alignEvent) - trials(idx(iTrial)).(conditions(iCond).alignEvent) ) / trials((idx(iTrial))).sRate * 1000 ), 1, 'first' );
+							fr{iCond,iL}(:,:,iTrial) = tmpFR(:,s+(LBOffset:UBOffset),iTrial);
+						end
+					else
+						fr{iCond,iL}(:,:,:) = cat( 1, fr{iCond,1}(:,:,:), fr{iCond,2}(:,:,:), fr{iCond,3}(:,:,:), fr{iCond,4}(:,:,:) );
+					end
+
+					%% Mean (accumulated) firing rate across cell population for each trial
+					subplot( nRows, nCols, (iEcc-1)*nCols + 1 ); hold on;
+					h = plot( squeeze( mean( sum(fr{iCond,iL}(:,:,:), 2), 1 ) ), 'lineStyle', lineStyles{k}, 'lineWidth', 2, 'color', colors{k}, 'displayName', names{k} );
+					% if( iEcc == 1 )
+					% 	hs(k) = h;
+					% end
+					
+					if( k == 3 )
+						set( gca, 'fontsize', 18, 'lineWidth', 2 );
+						title( sprintf('Ecc=%d', conditions(iCond).eccentricity) );
+						if( iEcc == 2 )
+							ylabel( sprintf('Population mean FR') );
+						end
+						% if( iEcc == 1 )
+						% 	legend( hs, 'location', 'northwest' );
+						% end
+						if( iEcc == nRows )
+							xlabel('Trial index');
+						end
+					end
+
+					%% Prabability density of population mean (accumulated) firing rate across trials
+					subplot( nRows, nCols, (iEcc-1)*nCols + 2 ); hold on;
+					points = squeeze( mean( sum(fr{iCond,iL}(:,:,:), 2), 1 ) )';
+					st = max(points) / (round(nTrials/3));
+					edges = -st/2+min(points) : st : max(points)+st+st/2;
+					cnts = histc( points, edges ); cnts(end) = [];
+					cnts = cnts / sum(cnts) / (edges(2)-edges(1));
+					h = plot( (edges(1:end-1)+edges(2:end))/2, cnts, 'LineStyle', lineStyles{k}, 'color', colors{k}, 'lineWidth', 2, 'displayName', names{k} );
+					if( iEcc == 1 )
+						hs(k) = h;
+					end
+
+					if( k == 3 )
+						set( gca, 'fontsize', 18, 'lineWidth', 2 );
+						% title( sprintf('Ecc=%d | %s+[%d,%d]', conditions(iCond).eccentricity, alignEvent, LBOffset, UBOffset) );
+						if( iEcc == 2 )
+							ylabel( sprintf('Probability density') );
+						end
+						if( iEcc == 1 )
+							set( legend( hs, 'location', 'northeast' ), 'position', [0.4627, 0.8528, 0.0552, 0.0884] );
+						end
+						if( iEcc == nRows )
+							xlabel('Population mean FR');
+						end
+					end
+
+					%% ROC by thresholding
+					if( k==2 || k==3 )
+						subplot( nRows, nCols, (iEcc-1)*nCols + 3 ); hold on;
+						t = [zeros(1,nTrials), ones(1,nTrials)];
+						data = cat( 4, fr{iEcc+([1 k]-1)*nEccs, iL} );
+						y = reshape( mean( sum(data,2), 1 ), 1, [] );
+						y = (y-min(y)) / (max(y)-min(y));
+						[tpr, fpr, th] = roc( t, y );
+						plot( fpr, tpr, 'lineWidth', 2, 'color', colors{k} );
+						text( 1, (4-k)*0.2-0.1, sprintf( 'AUC: %.4f', AreaUnderROC( unique( [tpr;fpr]', 'rows' ) ) ), 'fontsize', 18, 'color', colors{k}, 'horizontalAlignment', 'right', 'verticalAlignment', 'bottom' );
+
+						if( k == 3 )
+							set( gca, 'fontsize', 18, 'lineWidth', 2 );
+							if( iEcc == 1 )
+								title('Thresholding Classifier');
+							end
+							if( iEcc == 2 )
+								ylabel( sprintf('False alarm rate') );
+							end
+							if( iEcc == nRows )
+								xlabel('Correct detection rate');
+							end
+						end
+					end
+
+
+					%% ROC with GLM classifier
+					if( k == 3 )
+						subplot( nRows, nCols, (iEcc-1)*nCols + 4 ); hold on;
+						data = cat( 4, fr{iEcc+(0:2)*nEccs, iL} );
+						X = reshape( mean( data, 2 ), size(data,1), [] )';
+						T = [zeros(1,nTrials), ones(1,nTrials*2)]';
+						N = round(nTrials/3*2);
+						nBoots = 100;
+						for(iBoot = nBoots:-1:1)
+							rndIdx = [randperm(nTrials), randperm(nTrials)+nTrials, randperm(nTrials)+nTrials*2];
+							trainIdx = [1:N, (1:N)+nTrials, (1:N)+2*nTrials];
+							mdl = fitglm( X(rndIdx(trainIdx),:), T(rndIdx(trainIdx)), 'linear', 'distribution', 'binomial' );
+							for( m = 1 : 2 )
+								testIdx = [N+1:nTrials, (N+1:nTrials)+nTrials*m];
+								[tpr, fpr] = roc( T(testIdx)', mdl.predict(X(testIdx,:))' );	% True Positive Rate, False Positive Rate
+								AUC(m,iBoot) = AreaUnderROC( unique( [tpr;fpr]', 'rows' ) );
+							end
+						end
+
+						for( m = 1 : 2 )
+							M = mean(AUC(m,:));
+							sd = std(AUC(m,:));
+							plot( m, M, 's', 'color', colors{m+1}, 'markersize', 8, 'lineWidth', 2 );
+							plot( [m m], M+[-1 1]*sd, 'lineWidth', 2, 'color', colors{m+1} );
+							text( m, 0.1, sprintf( '%.4f\\pm\n%.4f', M, sd ), 'fontsize', 14, 'color', colors{m+1}, 'horizontalAlignment', 'center', 'verticalAlignment', 'bottom' );
+						end
+
+						set( gca, 'xlim', [0 3], 'ylim', [0 1.1], 'xtick', [1 2], 'XTickLabel', {'2 cpd', '10 cpd'}, 'fontsize', 18, 'lineWidth', 2 );
+						% if( iEcc == 2 )
+						% 	ylabel( sprintf('False alarm rate') );
+						% end
+						if( iEcc == 1 )
+							title('GLM Classifier');
+						end
+						if( iEcc == nRows )
+							xlabel( sprintf('Bootstrap AUC (%d)', nBoots) );
+						end
+					end
+				end
+				if( ~isempty(saveFolder) && exist(saveFolder,'dir') )
+					saveas( gcf, fullfile( saveFolder, sprintf( 'Trial-by-Trial Prediction, %s+[%d,%d], %s.fig', alignEvent, LBOffset, UBOffset, layerName ) ) );
+					saveas( gcf, fullfile( saveFolder, sprintf( 'Trial-by-Trial Prediction, %s+[%d,%d], %s.png', alignEvent, LBOffset, UBOffset, layerName ) ) );
+				end
+			end
+
+			% [coef, scores, latent] = pca( fr );
+			% scores = [xVel;yVel]' * coef;
+			% plot( [0 coef(1,1)*sqrt(latent(1))], [0 coef(2,1)*sqrt(latent(1))], '-', 'color', colors{iCond}, 'LineWidth', 2 );
+			% plot( [0 coef(1,2)*sqrt(latent(2))], [0 coef(2,2)*sqrt(latent(2))], '--', 'color', colors{iCond}, 'LineWidth', 2 );
+		end
+
+
+		function [tTicks, accAUC, segAUC, frAcc, frSeg] = TrialPredictWithAUC(obj, FR, time, conditions, trials, trialsIdx, cellIdx, applyRectify, alignEvent, LBOffset, UBOffset, tStep, tWin, saveFolder)
+			if( nargin() < 9 || isempty(applyRectify) )
+				applyRectify = true;
+			end
+			if( nargin() < 12 || isempty(tStep) )
+				tStep = 10;
+			end
+			if( nargin() < 13 || isempty(tWin) )
+				tWin = 50;
+			end
+			if( nargin() < 14 )
+				saveFolder = [];
+			end
+			tWin = round(tWin/2)*2;
+
+			nTrials = size( FR{1}, 3 );
+			trialIdx = trialsIdx{1}(1:nTrials);
+
+			Eccs = unique([conditions.eccentricity]);
+			nEccs = size(Eccs,2);
+
+			tTicks = LBOffset : tStep : UBOffset;
+			accAUC = nan(5,2,nEccs,size(tTicks,2));		% AUC computed with accumulated firing rate in the segment of [LBOffset, tTicks(k)]; layers X SFs X Eccs X time
+			segAUC = accAUC;							% AUC computed with firing rate in the segment [-tWin/2,tWin/2]+tTicks(k)
+
+			frAcc = cell(size(conditions,2),5);
+			frSeg = frAcc;
+
+
+			for(iTick = 1 : size(tTicks,2))
+				for( iL = 1 : 5 )
+					for(iCond = 1 : size(conditions,2))
+						iEcc = find( conditions(iCond).eccentricity == Eccs );
+						iSF = find( conditions(iCond).sf == [2 10] );
+						iDur = find( conditions(iCond).duration == [500] );
+						iPre = find( conditions(iCond).present == [0 1] );
+						k = iSF + iPre - 1;
+
+						if( iL ~= 5 )
+							tmpFR = FR{iCond,iL}(:,:,:);
+							if(applyRectify)
+								tmpFR(tmpFR<0) = 0;
+	                        end
+							
+	                        frAcc{iCond,iL} = nan(size(FR{iCond,iL},1), tTicks(iTick) - LBOffset + 1, nTrials);
+	                        frSeg{iCond,iL} = nan(size(FR{iCond,iL},1), tWin+1, nTrials);
+							for( iTrial = 1 : nTrials )
+								s = find( time{iCond} >= round( ( trials(trialIdx(iTrial)).(alignEvent) - trials(trialIdx(iTrial)).(conditions(iCond).alignEvent) ) / trials((trialIdx(iTrial))).sRate * 1000 ), 1, 'first' );
+								frAcc{iCond,iL}(:,:,iTrial) = tmpFR(:, s+(LBOffset:tTicks(iTick)), iTrial);
+
+								if( s+tTicks(iTick)-tWin/2 < 1 )
+									idx = 1 : s+tTicks(iTick)+tWin/2;
+									frSeg{iCond,iL}(:,idx,iTrial) = tmpFR(:,idx,iTrial);
+								elseif( s+tTicks(iTick)+tWin/2 > size(tmpFR,2) )
+									idx = s+tTicks(iTick)-tWin/2 : size(tmpFR,2);
+									frSeg{iCond,iL}(:, idx-idx(end)+tWin+1, iTrial) = tmpFR(:,idx,iTrial);
+								else
+									frSeg{iCond,iL}(:,:,iTrial) = tmpFR(:, s+tTicks(iTick)+(-tWin/2:tWin/2), iTrial);
+								end
+							end
+						else
+							frAcc{iCond,iL} = cat( 1, frAcc{iCond,1}(:,:,:), frAcc{iCond,2}(:,:,:), frAcc{iCond,3}(:,:,:), frAcc{iCond,4}(:,:,:) );
+							frSeg{iCond,iL} = cat( 1, frSeg{iCond,1}(:,:,:), frSeg{iCond,2}(:,:,:), frSeg{iCond,3}(:,:,:), frSeg{iCond,4}(:,:,:) );
+						end
+
+						if( k > 1 )
+							t = [zeros(1,nTrials), ones(1,nTrials)];
+							data = cat( 4, frAcc{iEcc+([1 k]-1)*nEccs, iL} );
+							y = reshape( mean( sum(data,2), 1 ), 1, [] );
+							y = (y-min(y)) / (max(y)-min(y));
+							[tpr, fpr, th] = roc( t, y );
+							accAUC(iL,k-1,iEcc,iTick) = AreaUnderROC( unique( [tpr;fpr]', 'rows' ) );
+							
+							data = cat( 4, frSeg{iEcc+([1 k]-1)*nEccs, iL} );
+							y = reshape( mean( sum(data,2), 1 ), 1, [] );
+							y = (y-min(y)) / (max(y)-min(y));
+							[tpr, fpr, th] = roc( t, y );
+							segAUC(iL,k-1,iEcc,iTick) = AreaUnderROC( unique( [tpr;fpr]', 'rows' ) );
+						end
+					end
+				end
+			end
+
+
+			%% plot figures
+			nRows = size( unique([conditions.eccentricity]), 2 );
+			nCols = 4;
+			colors = {[0 0 1], [0 1 0], [1 0 0]};
+			lineStyles = {'-', '-.', '--'};
+			names = {'Absent', '2 cpd', '10 cpd'};
+			
+			for( iL = 1 : 5 )
+				if( iL ~= 5 )
+					layerName = obj.layers(iL).name;
+				else
+					layerName = 'Layers Average';
+				end
+				figure( 'NumberTitle', 'off', 'name', sprintf('Example Cells : Trial-by-Trial Prediction : %s+[%d,%d] : %s', alignEvent, LBOffset, UBOffset, layerName), 'color', 'w' );
+				pause(0.1);
+				jf = get(handle(gcf),'javaframe');
+				jf.setMaximized(1);
+				pause(1);
+
+				for(iCond = 1 : size(conditions,2))
+					iEcc = find( conditions(iCond).eccentricity == Eccs );
+					iSF = find( conditions(iCond).sf == [2 10] );
+					iDur = find( conditions(iCond).duration == [500] );
+					iPre = find( conditions(iCond).present == [0 1] );
+					k = iSF + iPre - 1;
+
+					%% Prabability density of population mean (accumulated) firing rate across trials
+					subplot( nRows, nCols, (iEcc-1)*nCols + 1 ); hold on;
+					points = squeeze( mean( sum(frAcc{iCond,iL}(:,:,:), 2), 1 ) )';
+					st = max(points) / (round(nTrials/3));
+					edges = -st/2+min(points) : st : max(points)+st+st/2;
+					cnts = histc( points, edges ); cnts(end) = [];
+					cnts = cnts / sum(cnts) / (edges(2)-edges(1));
+					h = plot( (edges(1:end-1)+edges(2:end))/2, cnts, 'LineStyle', lineStyles{k}, 'color', colors{k}, 'lineWidth', 2, 'displayName', names{k} );
+					if( iEcc == 1 )
+						hs(k) = h;
+						legend( hs, 'location', 'northeast' );
+					end
+
+					if( k == 3 )
+						set( gca, 'fontsize', 18, 'lineWidth', 2 );
+						title( sprintf('Ecc=%d | %s+[%d,%d]', conditions(iCond).eccentricity, alignEvent, LBOffset, UBOffset) );
+						if( iEcc == 2 )
+							ylabel( sprintf('Probability density') );
+						end
+						% if( iEcc == 1 )
+						% 	set( legend( hs, 'location', 'northeast' ), 'position', [0.4627, 0.8528, 0.0552, 0.0884] );
+						% end
+						if( iEcc == nRows )
+							xlabel('Population mean accumulated FR');
+						end
+					end
+
+					%% ROC by thresholding
+					if( k==2 || k==3 )
+						subplot( nRows, nCols, (iEcc-1)*nCols + 2 ); hold on;
+						t = [zeros(1,nTrials), ones(1,nTrials)];
+						data = cat( 4, frAcc{iEcc+([1 k]-1)*nEccs, iL} );
+						y = reshape( mean( sum(data,2), 1 ), 1, [] );
+						y = (y-min(y)) / (max(y)-min(y));
+						[tpr, fpr, th] = roc( t, y );
+						plot( fpr, tpr, 'lineWidth', 2, 'color', colors{k} );
+						% text( 1, (4-k)*0.2-0.1, sprintf( 'AUC: %.4f', AreaUnderROC( unique( [tpr;fpr]', 'rows' ) ) ), 'fontsize', 18, 'color', colors{k}, 'horizontalAlignment', 'right', 'verticalAlignment', 'bottom' );
+						text( 1, (4-k)*0.2-0.1, sprintf( 'AUC: %.4f', accAUC(iL,k-1,iEcc,end) ), 'fontsize', 18, 'color', colors{k}, 'horizontalAlignment', 'right', 'verticalAlignment', 'bottom' );
+
+						if( k == 3 )
+							set( gca, 'fontsize', 18, 'lineWidth', 2 );
+							if( iEcc == 1 )
+								title('Thresholding Classifier');
+							end
+							if( iEcc == 2 )
+								ylabel( sprintf('False alarm rate') );
+							end
+							if( iEcc == nRows )
+								xlabel('Correct detection rate');
+							end
+						end
+					end
+
+					%% AUC as a function of time computed with accumulated firing rate in the segment of [LBOffset, tTicks(k)]
+					if( k > 1 )
+						subplot( 2, 2, 2 ); hold on;
+						plot( tTicks, squeeze(accAUC(iL,k-1,iEcc,:)), 'color', colors{k}*(nEccs-iEcc+1)/nEccs, 'lineWidth', 2, 'displayName', sprintf('SF=%d, Ecc=%d', conditions(iCond).sf, conditions(iCond).eccentricity) );
+						if( k == 3 )
+							set( gca, 'fontsize', 18, 'lineWidth', 2 );
+							% set( legend, 'location', 'northwest' );
+							title('AUC Evolving over Time');
+							ylabel('AUC');
+						end
+					end
+
+					%% AUC as a function of time computed with firing rate in the segment [-tWin/2,tWin/2]+tTicks(k)
+					if( k > 1 )
+						subplot( 2, 2, 4 ); hold on;
+						plot( tTicks, squeeze(segAUC(iL,k-1,iEcc,:)), 'color', colors{k}*(nEccs-iEcc+1)/nEccs, 'lineWidth', 2, 'displayName', sprintf('SF=%d, Ecc=%d', conditions(iCond).sf, conditions(iCond).eccentricity) );
+						if( k == 3 )
+							set( gca, 'fontsize', 18, 'lineWidth', 2 );
+							set( legend, 'location', 'northwest', 'position', [0.8998, 0.3585, 0.0979, 0.1732] );
+							title(sprintf('AUC in Sliding Window of %d ms',tWin));
+							xlabel(['Time aligned to ', alignEvent]);
+							ylabel('AUC');
+						end
+					end
+
+					%% ROC with GLM classifier
+					% if( k == 3 )
+					% 	subplot( nRows, nCols, (iEcc-1)*nCols + 4 ); hold on;
+					% 	data = cat( 4, fr{iEcc+(0:2)*nEccs, iL} );
+					% 	X = reshape( mean( data, 2 ), size(data,1), [] )';
+					% 	T = [zeros(1,nTrials), ones(1,nTrials*2)]';
+					% 	N = round(nTrials/3*2);
+					% 	nBoots = 100;
+					% 	for(iBoot = nBoots:-1:1)
+					% 		rndIdx = [randperm(nTrials), randperm(nTrials)+nTrials, randperm(nTrials)+nTrials*2];
+					% 		trainIdx = [1:N, (1:N)+nTrials, (1:N)+2*nTrials];
+					% 		mdl = fitglm( X(rndIdx(trainIdx),:), T(rndIdx(trainIdx)), 'linear', 'distribution', 'binomial' );
+					% 		for( m = 1 : 2 )
+					% 			testIdx = [N+1:nTrials, (N+1:nTrials)+nTrials*m];
+					% 			[tpr, fpr] = roc( T(testIdx)', mdl.predict(X(testIdx,:))' );	% True Positive Rate, False Positive Rate
+					% 			AUC(m,iBoot) = AreaUnderROC( unique( [tpr;fpr]', 'rows' ) );
+					% 		end
+					% 	end
+
+					% 	for( m = 1 : 2 )
+					% 		M = mean(AUC(m,:));
+					% 		sd = std(AUC(m,:));
+					% 		plot( m, M, 's', 'color', colors{m+1}, 'markersize', 8, 'lineWidth', 2 );
+					% 		plot( [m m], M+[-1 1]*sd, 'lineWidth', 2, 'color', colors{m+1} );
+					% 		text( m, 0.1, sprintf( '%.4f\\pm\n%.4f', M, sd ), 'fontsize', 14, 'color', colors{m+1}, 'horizontalAlignment', 'center', 'verticalAlignment', 'bottom' );
+					% 	end
+
+					% 	set( gca, 'xlim', [0 3], 'ylim', [0 1.1], 'xtick', [1 2], 'XTickLabel', {'2 cpd', '10 cpd'}, 'fontsize', 18, 'lineWidth', 2 );
+					% 	% if( iEcc == 2 )
+					% 	% 	ylabel( sprintf('False alarm rate') );
+					% 	% end
+					% 	if( iEcc == 1 )
+					% 		title('GLM Classifier');
+					% 	end
+					% 	if( iEcc == nRows )
+					% 		xlabel( sprintf('Bootstrap AUC (%d)', nBoots) );
+					% 	end
+					% end
+
+
+				end
+
+				if( ~isempty(saveFolder) && exist(saveFolder,'dir') )
+					saveas( gcf, fullfile( saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction, %s+[%d,%d], %s.fig', alignEvent, LBOffset, UBOffset, layerName ) ) );
+					saveas( gcf, fullfile( saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction, %s+[%d,%d], %s.png', alignEvent, LBOffset, UBOffset, layerName ) ) );
+				end
+			end
+
+			% [coef, scores, latent] = pca( fr );
+			% scores = [xVel;yVel]' * coef;
+			% plot( [0 coef(1,1)*sqrt(latent(1))], [0 coef(2,1)*sqrt(latent(1))], '-', 'color', colors{iCond}, 'LineWidth', 2 );
+			% plot( [0 coef(1,2)*sqrt(latent(2))], [0 coef(2,2)*sqrt(latent(2))], '--', 'color', colors{iCond}, 'LineWidth', 2 );
 		end
 
 
