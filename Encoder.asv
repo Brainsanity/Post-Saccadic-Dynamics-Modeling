@@ -732,8 +732,8 @@ classdef Encoder < handle
 									else
 										dataOn = cat( 1, cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 1} ), cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 3} ) );
 										dataOff = cat( 1, cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 2} ), cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 4} ) );
-										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(1:size(frAcc{iEcc,1},1)), : ); obj.layers(3).locations( cellIdx{3,iEcc}(1:size(frAcc{iEcc,3},1)), : )];
-										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(1:size(frAcc{iEcc,2},1)), : ); obj.layers(4).locations( cellIdx{4,iEcc}(1:size(frAcc{iEcc,4},1)), : )];
+										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(1:size(frAcc{1,1},1)), : ); obj.layers(3).locations( cellIdx{3,iEcc}(1:size(frAcc{1,3},1)), : )];
+										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(1:size(frAcc{1,2},1)), : ); obj.layers(4).locations( cellIdx{4,iEcc}(1:size(frAcc{1,4},1)), : )];
 									end
 									wOn = cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOn.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;		% column vector
 									wOff = -cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOff.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;
@@ -758,11 +758,11 @@ classdef Encoder < handle
 									else
 										dataOn = cat( 1, cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 1} ), cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 3} ) );
 										dataOff = cat( 1, cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 2} ), cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 4} ) );
-										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(1:size(frSeg{iEcc,1},1)), : ); obj.layers(3).locations( cellIdx{3,iEcc}(1:size(frSeg{iEcc,3},1)), : )];
-										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(1:size(frSeg{iEcc,2},1)), : ); obj.layers(4).locations( cellIdx{4,iEcc}(1:size(frSeg{iEcc,4},1)), : )];
+										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(1:size(frSeg{1,1},1)), : ); obj.layers(3).locations( cellIdx{3,iEcc}(1:size(frSeg{1,3},1)), : )];
+										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(1:size(frSeg{1,2},1)), : ); obj.layers(4).locations( cellIdx{4,iEcc}(1:size(frSeg{1,4},1)), : )];
 									end
 									wOn = cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOn.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;		% column vector
-									wOff = -cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOff.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;
+									wOff = -cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOn.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;
 									w = [wOn, wOff];
 									w = w / sum(w);
 									y = w * squeeze(nanmean([dataOn; dataOff],2));
@@ -1287,7 +1287,7 @@ classdef Encoder < handle
 				ThresholdsSTD = Thresholds;
 				fitThreshold = true;
 			else
-				fitThreshold = true;false;
+				fitThreshold = false;
 			end
 			for( iL = 1 : 5 )
 				colors = { [0 1 0], [0 0.7 0], [0 0.4 0], [0 0.1 0]; ...	% for 2cpd
@@ -1308,33 +1308,28 @@ classdef Encoder < handle
 							plot( contrasts, squeeze(accTPRm(iL,iSF,iEcc,iTick,:)), '--', 'color', colors{iSF,iDur}, 'displayName', sprintf('%d ms', durs(iDur)), 'lineWidth', 1 );
 
 							if(fitThreshold)
-								if( ~any(isnan(accTPRm(iL,iSF,iEcc,iTick,:))) )
-									nTrials = 30;%size(frSeg{1},3);
-									hits = zeros(1, nTrials*size(contrasts,2));
-									for( iCont = 1 : size(contrasts,2) )
-										hits( (iCont-1)*nTrials + ( 1 : round(nTrials * accTPRm(iL,iSF,iEcc,iTick,iCont)) ) ) = 1;
-									end
-									[~, ~, nThresh, nPar, g, chisq] = psyfit( reshape(repmat(contrasts,nTrials,1),1,[]), hits, 'Thresh', targetRatio, 'Chance', chance, 'Lapses', 0, 'Log', 'Extra', 'PlotOff', 'Boots', 10, 'disttype', 'normal' );
-									par = mean(nPar,2);
-									stdPar(2) = std(nPar(2,:));
-									stdPar(1) = std(nPar(1,:));
-									thresh = mean(nThresh);
-									stdThresh = std(nThresh);
-									x = linspace( 0, max(contrasts)*1.1, 10000 );
-									y = psyfun( x, par(1), par(2), chance, 0, false, true, 'normal' );
-									yLow = psyfun( x, par(1) - stdPar(1), par(2) - stdPar(2), 0.1, 0, false, true, 'normal' );
-									yUp = psyfun( x, par(1) + stdPar(1), par(2) + stdPar(2), 0.1, 0, false, true, 'normal' );
-									plot( x, y, '-', 'LineWidth', 2.5, 'color', colors{iSF,iDur}, 'DisplayName', sprintf('%d cpd, %d ms', SFs(iSF), durs(iDur)) );
-									% set( fill( [x(2:end) x(end:-1:2)], [yLow(2:end) yUp(end:-1:2)], colors{iSF,iDur} ), 'LineStyle', 'none', 'FaceAlpha', 0.5 );
-									plot( [1, 1] * thresh, [0, targetRatio], '--', 'color', colors{iSF,iDur}, 'lineWidth', 2 );
-									% set( fill( [-1, 1, 1, -1]*stdThresh + thresh, [0, 0, targetRatio, targetRatio], colors{iSF,iDur} ), 'LineStyle', 'none', 'FaceAlpha', 0.5 );
-
-									Thresholds(iL,iSF,iEcc,iDur) = thresh;
-									ThresholdsSTD(iL,iSF,iEcc,iDur) = stdThresh;
-								else
-									Thresholds(iL,iSF,iEcc,iDur) = nan;
-									ThresholdsSTD(iL,iSF,iEcc,iDur) = nan;
+								nTrials = 30;%size(frSeg{1},3);
+								hits = zeros(1, nTrials*size(contrasts,2));
+								for( iCont = 1 : size(contrasts,2) )
+									hits( (iCont-1)*nTrials + ( 1 : round(nTrials * accTPRm(iL,iSF,iEcc,iTick,iCont)) ) ) = 1;
 								end
+								[~, ~, nThresh, nPar, g, chisq] = psyfit( reshape(repmat(contrasts,nTrials,1),1,[]), hits, 'Thresh', targetRatio, 'Chance', chance, 'Lapses', 0, 'Log', 'Extra', 'PlotOff', 'Boots', 10, 'disttype', 'normal' );
+								par = mean(nPar,2);
+								stdPar(2) = std(nPar(2,:));
+								stdPar(1) = std(nPar(1,:));
+								thresh = mean(nThresh);
+								stdThresh = std(nThresh);
+								x = linspace( 0, max(contrasts)*1.1, 10000 );
+								y = psyfun( x, par(1), par(2), chance, 0, false, true, 'normal' );
+								yLow = psyfun( x, par(1) - stdPar(1), par(2) - stdPar(2), 0.1, 0, false, true, 'normal' );
+								yUp = psyfun( x, par(1) + stdPar(1), par(2) + stdPar(2), 0.1, 0, false, true, 'normal' );
+								plot( x, y, '-', 'LineWidth', 2.5, 'color', colors{iSF,iDur}, 'DisplayName', sprintf('%d cpd, %d ms', SFs(iSF), durs(iDur)) );
+								% set( fill( [x(2:end) x(end:-1:2)], [yLow(2:end) yUp(end:-1:2)], colors{iSF,iDur} ), 'LineStyle', 'none', 'FaceAlpha', 0.5 );
+								plot( [1, 1] * thresh, [0, targetRatio], '--', 'color', colors{iSF,iDur}, 'lineWidth', 2 );
+								% set( fill( [-1, 1, 1, -1]*stdThresh + thresh, [0, 0, targetRatio, targetRatio], colors{iSF,iDur} ), 'LineStyle', 'none', 'FaceAlpha', 0.5 );
+
+								Thresholds(iL,iSF,iEcc,iDur) = thresh;
+								ThresholdsSTD(iL,iSF,iEcc,iDur) = stdThresh;
 							end
 						end
 						if(iSF == 1 && iEcc == 1)

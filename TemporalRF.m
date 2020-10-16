@@ -114,7 +114,7 @@ classdef TemporalRF < handle
 		end
 
 
-		function params = SynthesizeParams( obj, cellType, nCells, isMedian, whichPaper )
+		function params = SynthesizeParams( obj, cellType, nCells, isMedian, whichPaper, HsBe1 )
 			%% Generate paparameters according to paper reports
 			%   isMedian:		true for median values; false for mean values
 			%   whichPaper:		used for P cells: '97' refers to Benardete & Kaplan, Visual Neuroscience, 1997, I; '99' refers to Benardete & Kaplan, JOP, 1999
@@ -124,6 +124,9 @@ classdef TemporalRF < handle
 			end
 			if( nargin() < 5 || isempty(whichPaper) )
 				whichPaper = '97';
+			end
+			if( nargin() < 6 || isempty(HsBe1) )
+				HsBe1 = false;
 			end
 
 			cellType = [upper(cellType(1:2)), lower(cellType(3:end))];
@@ -138,16 +141,22 @@ classdef TemporalRF < handle
 					[params.centerD] = deal(obj.paperParams([cellType, 'Center', whichPaper ]).D(3+(~isMedian)));
 					[params.centerN_L] = deal(obj.paperParams([cellType, 'Center', whichPaper ]).N_L(3+(~isMedian)));
 					[params.centerTau_L] = deal(obj.paperParams([cellType, 'Center', whichPaper ]).Tau_L(3+(~isMedian)));
-					% [params.centerH_S] = deal(obj.paperParams([cellType, 'Center', whichPaper ]).H_S(3+(~isMedian)));
-					[params.centerH_S] = deal(1);
+					if(HsBe1)
+						[params.centerH_S] = deal(1);
+					else
+						[params.centerH_S] = deal(obj.paperParams([cellType, 'Center', whichPaper ]).H_S(3+(~isMedian)));
+					end
 					[params.centerTau_H] = deal(obj.paperParams([cellType, 'Center', whichPaper ]).Tau_H(3+(~isMedian)));
 
 					[params.surroundA] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).A(3+(~isMedian)));
 					[params.surroundD] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).D(3+(~isMedian)));
 					[params.surroundN_L] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).N_L(3+(~isMedian)));
 					[params.surroundTau_L] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).Tau_L(3+(~isMedian)));
-					% [params.surroundH_S] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).H_S(3+(~isMedian)));
-					[params.surroundH_S] = deal(1);
+					if(HsBe1)
+						[params.surroundH_S] = deal(1);
+					else
+						[params.surroundH_S] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).H_S(3+(~isMedian)));
+					end
 					[params.surroundTau_H] = deal(obj.paperParams([cellType, 'Surround', whichPaper ]).Tau_H(3+(~isMedian)));
 				
 				case {'MOn', 'MOff'}
@@ -156,8 +165,11 @@ classdef TemporalRF < handle
 					[params.D] = deal(obj.paperParams(cellType).D(3+(~isMedian)));
 					[params.N_L] = deal(obj.paperParams(cellType).N_L(3+(~isMedian)));
 					[params.Tau_L] = deal(obj.paperParams(cellType).Tau_L(3+(~isMedian)));
-					% [params.H_S] = deal(obj.paperParams(cellType).H_S(3+(~isMedian)));
-					[params.H_S] = deal(1);
+					if(HsBe1)
+						[params.H_S] = deal(1);
+					else
+						[params.H_S] = deal(obj.paperParams(cellType).H_S(3+(~isMedian)));
+					end
 					[params.Tau_0] = deal(obj.paperParams(cellType).Tau_0(3+(~isMedian)));
 					[params.C_half] = deal(obj.paperParams(cellType).C_half(3+(~isMedian)));
 
@@ -231,6 +243,7 @@ classdef TemporalRF < handle
 	            	end
 	            else
 		        	tRF = real( ifft(K, [], 2) );		% along 2nd dimension
+		        	tRF = tRF(:, t < 0.5);
                     FR = zeros( size(tRF,1), size(input,2) );
                     parfor( iCell = 1 : size(tRF,1) )
                         FR(iCell,:) = filter( tRF(iCell,:), 1, input(iCell,:), [], 2 );		% along 2nd dimension
