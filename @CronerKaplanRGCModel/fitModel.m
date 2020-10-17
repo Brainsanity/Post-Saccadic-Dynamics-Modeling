@@ -133,6 +133,8 @@ function [powerFunction, fittedParams, fittedParamsSE] = nonLinearFitData(x, y, 
         y = yy;
         x = xx;
     end
+
+    isConverged = false;
     for(itr = 1 : 100)
         lastwarn('');
         [fittedParams,~,~,varCovarianceMatrix,~] = nlinfit(x, y, powerFunction, initialParams(1:2+fitIntercept), opts);
@@ -140,9 +142,13 @@ function [powerFunction, fittedParams, fittedParamsSE] = nonLinearFitData(x, y, 
         if( any( abs( fittedParams - initialParams(1:2+fitIntercept) ) > 1e-6 | abs( fittedParams - initialParams(1:2+fitIntercept) ) ./ fittedParams > 1e-6 ) || ~isempty(msg) )
             initialParams(1:2+fitIntercept) = fittedParams;
         else
+            isConverged = true;
             fprintf('Converged, itr = %d\n', itr);
             break;
         end
+    end
+    if(~isConverged)
+        fprintf('Warning: Fitting not converged after %d times of iterations of nlinfit()\n', 100);
     end
 
     % standard error of the mean
