@@ -24,21 +24,57 @@ function fitRawData(obj)
     minY = [0.0044, 11.6141*0.0044, eps; 0.0112, 38.8495*0.0112, eps];     % minimal radius as half the minimal cell spacing
 
     for( k = 1 : 2 )
+        %% center radius
+        % ecc => radius
         fprintf('%s Cell - Fitting Raw Data: ecc => center radius...\n', Cell{k});
         x = obj.([Cell{k} 'CenterData'])('size').eccDegs;
         y = obj.([Cell{k} 'CenterData'])('size').radiusDegs;
-        [obj.([Cell{k} 'CenterRadiusFunction']), obj.([Cell{k} 'CenterRadiusParams']), obj.([Cell{k} 'CenterRadiusParamsSE']), isConverged] = nonLinearFitData(x, y, [], [], obj.([Cell{k} 'CenterData'])('size').initialParams, obj.fitIntercept, minY(k,1));
+        [obj.([Cell{k} 'CenterRadiusFunction']), obj.([Cell{k} 'CenterRadiusParams']), obj.([Cell{k} 'CenterRadiusParamsSE']), isConverged] = nonLinearFitData(x, y, [], [], obj.([Cell{k} 'CenterData'])('size').initialParams, obj.fitIntercept, minY(k,1), max(1, min(x)));
 
+        % spacing => radius
+        fprintf('%s Cell - Fitting Raw Data: spacing => center radius...\n', Cell{k});
+        [~, spacingOn] = WatsonRGCModel.RFSpacingDensityMeridian( x, WatsonRGCModel.enumeratedMeridianNames{1}, [Cell{k} 'On'] );   % temporal meridian
+        [~, spacingOff] = WatsonRGCModel.RFSpacingDensityMeridian( x, WatsonRGCModel.enumeratedMeridianNames{1}, [Cell{k} 'Off'] );
+        spacing = mean([spacingOn, spacingOff], 2);     % average between ON and OFF, given that x involves both ON and OFF cells
+        obj.([Cell{k} 'CenterSpacing2Radius']).coef = polyfit( log(spacing), log(y), 1 );
+        [r_, p_] = corrcoef( log(spacing), log(y) );
+        obj.([Cell{k} 'CenterSpacing2Radius']).r = r_(2);
+        obj.([Cell{k} 'CenterSpacing2Radius']).pVal = p_(2);
+        obj.([Cell{k} 'CenterSpacing2Radius']).fun = @(x) exp(polyval(obj.([Cell{k} 'CenterSpacing2Radius']).coef, log(x)));
+
+        %% surround radius
+        % ecc => radius
         fprintf('%s Cell - Fitting Raw Data: ecc => surround radius...\n', Cell{k});
         x = obj.([Cell{k} 'SurroundData'])('size').eccDegs;
         y = obj.([Cell{k} 'SurroundData'])('size').radiusDegs;
         [obj.([Cell{k} 'SurroundRadiusFunction']), obj.([Cell{k} 'SurroundRadiusParams']), obj.([Cell{k} 'SurroundRadiusParamsSE']), isConverged] = nonLinearFitData(x, y, [], [], obj.([Cell{k} 'SurroundData'])('size').initialParams, obj.fitIntercept, minY(k,2));
+
+        % spacing => radius
+        if(k == 1)
+            fprintf('%s Cell - Fitting Raw Data: spacing => surround radius...\n', Cell{k});
+            [~, spacingOn] = WatsonRGCModel.RFSpacingDensityMeridian( x, WatsonRGCModel.enumeratedMeridianNames{1}, [Cell{k} 'On'] );   % temporal meridian
+            [~, spacingOff] = WatsonRGCModel.RFSpacingDensityMeridian( x, WatsonRGCModel.enumeratedMeridianNames{1}, [Cell{k} 'Off'] );
+            spacing = mean([spacingOn, spacingOff], 2);     % average between ON and OFF, given that x involves both ON and OFF cells
+            obj.([Cell{k} 'SurroundSpacing2Radius']).coef = polyfit( log(spacing), log(y), 1 );
+            [r_, p_] = corrcoef( log(spacing), log(y) );
+            obj.([Cell{k} 'SurroundSpacing2Radius']).r = r_(2);
+            obj.([Cell{k} 'SurroundSpacing2Radius']).pVal = p_(2);
+            obj.([Cell{k} 'SurroundSpacing2Radius']).fun = @(x) exp(polyval(obj.([Cell{k} 'SurroundSpacing2Radius']).coef, log(x)));
+
+        else    % M cell surround data is too scattered to fit, therefore we assume that for a given spacing, the radius ratio between center and surround is consistent for P and M cells
+            obj.([Cell{k} 'SurroundSpacing2Radius']).coef = [];
+            obj.([Cell{k} 'SurroundSpacing2Radius']).r = [];
+            obj.([Cell{k} 'SurroundSpacing2Radius']).pVal = [];
+            obj.([Cell{k} 'SurroundSpacing2Radius']).fun = @(x) obj.PSurroundSpacing2Radius.fun(x) ./ obj.PCenterSpacing2Radius.fun(x) .* obj.MCenterSpacing2Radius.fun(x);
+        end
         
+        %% center peak sensitivity
         fprintf('%s Cell - Fitting Raw Data: center radius => center peak sensitivity...\n', Cell{k});
         x = obj.([Cell{k} 'CenterData'])('sensitivity').radiusDegs;
         y = obj.([Cell{k} 'CenterData'])('sensitivity').peakSensitivity;
         [obj.([Cell{k} 'CenterPeakSensitivityFunction']), obj.([Cell{k} 'CenterPeakSensitivityParams']), obj.([Cell{k} 'CenterPeakSensitivityParamsSE']), isConverged] = nonLinearFitData(x, y, [], [], obj.([Cell{k} 'CenterData'])('sensitivity').initialParams, obj.fitIntercept, minY(k,3));
 
+        %% surround peak sensitivity
         fprintf('%s Cell - Fitting Raw Data: surround radius => surround peak sensitivity...\n', Cell{k});
         x = obj.([Cell{k} 'SurroundData'])('sensitivity').radiusDegs;
         y = obj.([Cell{k} 'SurroundData'])('sensitivity').peakSensitivity;
@@ -57,7 +93,7 @@ function usePaperFits(obj)
     yMedian = obj.PCenterData('size').radiusDegsMedianTable;
     yIQR = obj.PCenterData('size').radiusDegsIQRTable;
     ySamplesNum = obj.PCenterData('size').samplesTable;
-    [obj.PCenterRadiusFunction, obj.PCenterRadiusParams, obj.PCenterRadiusParamsSE, isConverged] = nonLinearFitData(x, yMedian, yIQR, ySamplesNum, obj.PCenterData('size').initialParams, obj.fitIntercept, minY(1));
+    [obj.PCenterRadiusFunction, obj.PCenterRadiusParams, obj.PCenterRadiusParamsSE, isConverged] = nonLinearFitData(x, yMedian, yIQR, ySamplesNum, obj.PCenterData('size').initialParams, obj.fitIntercept, minY(1), max(1, min(x)));
     
     
     % The ecc - surround radius equation from the paper (Figure 4 caption)
@@ -89,7 +125,7 @@ function fitMedianData(obj)
         yMedian = obj.([Cell{k} 'CenterData'])('size').radiusDegsMedianTable;
         yIQR = obj.([Cell{k} 'CenterData'])('size').radiusDegsIQRTable;
         ySamplesNum = obj.([Cell{k} 'CenterData'])('size').samplesTable;
-        [obj.([Cell{k} 'CenterRadiusFunction']), obj.([Cell{k} 'CenterRadiusParams']), obj.([Cell{k} 'CenterRadiusParamsSE']), isConverged] = nonLinearFitData(x, yMedian, yIQR, ySamplesNum, obj.([Cell{k} 'CenterData'])('size').initialParams, obj.fitIntercept, minY(k,1));
+        [obj.([Cell{k} 'CenterRadiusFunction']), obj.([Cell{k} 'CenterRadiusParams']), obj.([Cell{k} 'CenterRadiusParamsSE']), isConverged] = nonLinearFitData(x, yMedian, yIQR, ySamplesNum, obj.([Cell{k} 'CenterData'])('size').initialParams, obj.fitIntercept, minY(k,1), max(1, min(x)));
         
         % Fit the ecc - surround radius data
         fprintf('%s Cell - Fitting Median Data: ecc => surround radius...\n', Cell{k});
@@ -97,7 +133,7 @@ function fitMedianData(obj)
         yMedian = obj.([Cell{k} 'SurroundData'])('size').radiusDegsMedianTable;
         yIQR = obj.([Cell{k} 'SurroundData'])('size').radiusDegsIQRTable;
         ySamplesNum = obj.([Cell{k} 'SurroundData'])('size').samplesTable;
-        [obj.([Cell{k} 'SurroundRadiusFunction']), obj.([Cell{k} 'SurroundRadiusParams']), obj.([Cell{k} 'SurroundRadiusParamsSE']), isConverged] = nonLinearFitData(x, yMedian, yIQR, ySamplesNum, obj.([Cell{k} 'SurroundData'])('size').initialParams, obj.fitIntercept, minY(k,2));
+        [obj.([Cell{k} 'SurroundRadiusFunction']), obj.([Cell{k} 'SurroundRadiusParams']), obj.([Cell{k} 'SurroundRadiusParamsSE']), isConverged] = nonLinearFitData(x, yMedian, yIQR, ySamplesNum, obj.([Cell{k} 'SurroundData'])('size').initialParams, obj.fitIntercept, minY(k,2), max(1, min(x)));
 
         
         % Fit the radius - center sensitivity data
@@ -120,7 +156,7 @@ function fitMedianData(obj)
 end
 
 
-function [powerFunction, fittedParams, fittedParamsSE, isConverged] = nonLinearFitData(x, y, yIQR, ySamplesNum, initialParams, fitIntercept, minY)
+function [powerFunction, fittedParams, fittedParamsSE, isConverged] = nonLinearFitData(x, y, yIQR, ySamplesNum, initialParams, fitIntercept, minY, minX)
     
     % Objective Function
     if(fitIntercept)
@@ -158,6 +194,17 @@ function [powerFunction, fittedParams, fittedParamsSE, isConverged] = nonLinearF
     end
     if(~isConverged)
         fprintf('\tWarning: Fitting not converged after %d iterations of nlinfit()\n\n', 100);
+    end
+
+    % linear interpolation for input < minX
+    if(exist('minX', 'var') && ~isempty(minX))
+        % minX = 1;
+        x = minX + (0:0.01:0.1);
+        if(fitIntercept)
+            powerFunction = @(p,xx) max(minY, (xx >= minX) .* (p(1)*xx.^p(2)+p(3)) + (xx < minX) .* interp1(x, (p(1)*x.^p(2)+p(3)), xx, 'linear', 'extrap'));
+        else
+            powerFunction = @(p,xx) max(minY, (xx >= minX) .* (p(1)*xx.^p(2)) + (xx < minX) .* interp1(x, (p(1)*x.^p(2)), xx, 'linear', 'extrap'));
+        end
     end
 
     % standard error of the mean

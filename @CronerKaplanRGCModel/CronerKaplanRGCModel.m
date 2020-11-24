@@ -22,17 +22,21 @@ classdef CronerKaplanRGCModel < handle
         PCenterRadiusFunction;
         PCenterRadiusParams;
         PCenterRadiusParamsSE;
+        PCenterSpacing2Radius;
         MCenterRadiusFunction;
         MCenterRadiusParams;
         MCenterRadiusParamsSE;
+        MCenterSpacing2Radius;
         
         % Model of surround radius with eccentricity
         PSurroundRadiusFunction;
         PSurroundRadiusParams;
         PSurroundRadiusParamsSE;
+        PSurroundSpacing2Radius;
         MSurroundRadiusFunction;
         MSurroundRadiusParams;
         MSurroundRadiusParamsSE;
+        MSurroundSpacing2Radius;
         
         % Model of center sensitivity with center radius
         PCenterPeakSensitivityFunction;
@@ -107,12 +111,15 @@ classdef CronerKaplanRGCModel < handle
         % Method to synthesize data for a sample of eccentricity values
         synthesizedParams = SynthesizeRFParams(obj, cellType, eccDegs);
 
+        % Method to generate RF params for given spacing
+        rfParams = Spacing2RFParams(obj, cellType, spacing, temporalEccDegs);
+
         % Method to calculate response to given input of spatial RFs with specified parameters and RF locations
         [fr, fr_c, fr_s] = LinearResponse(obj, stimulus, inputX, inputY, eyeX, eyeY, rfParams, rfX, rfY);
-        sensitivity = SpatialSensitivity(obj, rfParams, SFs);
+        [sensitivity, centerSensitivity, surroundSensitivity] = SpatialSensitivity(obj, rfParams, SFs);
 
         % Method to display synthesized parameters
-        DisplaySynthesizedRFParams(obj);
+        DisplaySynthesizedRFParams(obj, PCells, MCells);
 
         DisplayFittedCenterSurroundRadiusRatio(obj);
 

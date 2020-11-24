@@ -1,6 +1,6 @@
 classdef Encoder < handle
 
-	properties (SetAccess = private)
+	properties (SetAccess = public)%private)
 		layers;%(4) = struct( 'name', [], 'locations', [], 'sRFRc', [], 'sRFKc', [], 'sRFRs', [], 'sRFKs', [] );
 		SpatialModel;
 		TemporalModel;
@@ -26,27 +26,37 @@ classdef Encoder < handle
 			names = {'POn', 'POff', 'MOn', 'MOff'};
 			[obj.layers.name] = names{:};
 
-			obj.SpatialModel = CronerKaplanRGCModel( 'dataSetToFit', 'raw', 'fitIntercept', false, 'randomizeCenterRadii', true, 'randomizeCenterSensitivities', true, 'randomizeSurroundRadii', true, 'randomizeSurroundSensitivities', true );
+			% obj.SpatialModel = CronerKaplanRGCModel( 'dataSetToFit', 'raw', 'fitIntercept', false, 'randomizeCenterRadii', true, 'randomizeCenterSensitivities', true, 'randomizeSurroundRadii', true, 'randomizeSurroundSensitivities', true );
+			obj.SpatialModel = CronerKaplanRGCModel( 'dataSetToFit', 'raw', 'fitIntercept', false, 'randomizeCenterRadii', false, 'randomizeCenterSensitivities', false, 'randomizeSurroundRadii', false, 'randomizeSurroundSensitivities', false );
 
 			for( k =  1 : size(obj.layers,2) )
 				fprintf( 'k = %d\ncellType = %s\n\n', k, names{k} );
 
 				% get cell locations
 				if( exist( fullfile( paramFolder, ['Mosaic_' names{k} '_Radius20.0deg_maxMovPrctile20.mat'] ), 'file' ) )
-					obj.layers(k).locations = load( fullfile( paramFolder, ['Mosaic_' names{k} '_Radius20.0deg_maxMovPrctile20.mat'] ), 'rfPositions' );
-					obj.layers(k).locations = obj.layers(k).locations.rfPositions;
+					mosaic_ = load( fullfile( paramFolder, ['Mosaic_' names{k} '_Radius20.0deg_maxMovPrctile20.mat'] ), 'rfPositions', 'spacing' );
+					obj.layers(k).locations = mosaic_.rfPositions;
+					obj.layers(k).spacing = mosaic_.spacing;
 				else
 					obj.layers(k).locations = WatsonRGCModel.CreateMosaic(20, names{k}, 'saveFolder', paramFolder, 'maxIterations', 3000);
+					obj.layers(k).spacing = WatsonRGCModel.AveSpacingInMosaic(obj.layers(k).locations);
 				end
 
 				% get spatial RF parameters
-				if( exist( fullfile( paramFolder, ['SpatialRFParams_', names{k}, '.mat'] ), 'file' ) )
+				if( false && exist( fullfile( paramFolder, ['SpatialRFParams_', names{k}, '.mat'] ), 'file' ) )
 					obj.layers(k).sRFParams = load( fullfile( paramFolder, ['SpatialRFParams_', names{k}, '.mat'] ), 'sRFParams' );
 					obj.layers(k).sRFParams = obj.layers(k).sRFParams.sRFParams;
 				else
-					sRFParams = obj.SpatialModel.SynthesizeRFParams( sqrt(sum(obj.layers(k).locations.^2,2))', names{k} );
-					save( fullfile( paramFolder, ['SpatialRFParams_', names{k}, '.mat'] ), 'sRFParams' );
+					% sRFParams = obj.SpatialModel.SynthesizeRFParams( sqrt(sum(obj.layers(k).locations.^2,2))', names{k} );
+					% compute temporal equivalent eccentricity
+					ecc_ = 0:0.001:120;
+					[~, spacing_] = WatsonRGCModel.RFSpacingDensityMeridian( ecc_, WatsonRGCModel.enumeratedMeridianNames{1}, names{k} );   % temporal meridian
+					[~, spacing] = WatsonRGCModel.RFSpacingDensity(obj.layers(k).locations, obj.layers(k).name);
+					temporalEccDegs = interp1( spacing_, ecc_, spacing, 'linear', 'extrap' );
+					
+					sRFParams = obj.SpatialModel.Spacing2RFParams(names{k}, obj.layers(k).spacing', temporalEccDegs);
 					obj.layers(k).sRFParams = sRFParams;
+					save( fullfile( paramFolder, ['SpatialRFParams_', names{k}, '.mat'] ), 'sRFParams' );
 				end
 
 				% get temporal RF parameters
@@ -55,7 +65,73 @@ classdef Encoder < handle
 		end
 
 
-		function [LFR, time, conditions, sFR, sFR_c, sFR_s, trials, trialsIdx, cellIdx, nCells, nCellsUsed] = ExampleCells(obj, dataFolder, alignEvent, stabilize, saveFolder)
+		function ShowLinearity(obj, dataFolder)
+			%% Theoretically, for fixed RF parameters, the neuronal response before nonlinearity is linear to linear combinations of the contrast and target
+			%  Here, we show this emperically
+
+			if( nargin() < 2 || isempty(dataFolder) )
+				dataFolder = '../../data/';
+			end
+			trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'A014.mat'));
+			iTrial = find([trials.eccentricity] == 4 & [trials.spatialFreq] == 2, 1, 'first');
+
+			index = trials(iTrial).saccadeOff - round(0.150*trials(iTrial).sRate) : trials(iTrial).saccadeOff + round(500/1000*trials(iTrial).sRate);
+			x  = trials(iTrial).x.position(index) / 60;
+			y  = trials(iTrial).y.position(index) / 60;
+
+			[noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(iTrial).backgroundImage), trials(iTrial).pixelAngle/60 );
+			grating = obj.GenerateGrating( trials(iTrial).eccentricity, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
+			noise = noise * trials(iTrial).backgroundContrast;
+            
+			iL = 3;	% POn cell
+			iCell = find( abs(obj.layers(iL).locations(:,1) - trials(iTrial).eccentricity) < 0.1 & abs(obj.layers(iL).locations(:,2)) < 0.1, 1, 'first' );
+
+			figure('NumberTitle', 'off', 'name', 'Show Linearity Empirically', 'color', 'w');
+			
+			subplot(1,2,1);
+			imshow( noise+grating, [], 'xdata', inputX([1 end]), 'ydata', inputY([1 end]) ); hold on;
+			plot( x, y, 'b', 'lineWidth', 2 );
+			rectangle( 'position', [ obj.layers(iL).locations(iCell, 1), obj.layers(iL).locations(iCell, 2), 2*obj.layers(iL).sRFParams(iCell).centerRadii, 2*obj.layers(iL).sRFParams(iCell).centerRadii ],...
+					   'FaceColor', 'r', 'LineStyle', 'none', 'Curvature', [1 1] );
+			set( gca, 'ydir', 'normal', 'visible', 'on', 'fontsize', 20, 'lineWidth', 2 );
+            drawnow;
+
+			%%
+			avContrast = trials(iTrial).backgroundContrast;
+			contrasts = 0.1:0.1:0.5;
+			
+			fprintf('Processing noise...\n');
+			[~, sFR_c_noise, sFR_s_noise] = obj.SpatialModel.LinearResponse( noise, inputX, inputY, x, y, obj.layers(iL).sRFParams(iCell), obj.layers(iL).locations(iCell,1), obj.layers(iL).locations(iCell,2));
+			LFR_noise = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(iCell), avContrast, trials(iTrial).sRate, sFR_c_noise, sFR_s_noise );
+			subplot(1,2,2); hold on;
+			t = (index-trials(iTrial).saccadeOff) / trials(iTrial).sRate * 1000;
+			h(1) = plot( t, LFR_noise, 'g', 'LineWidth', 2, 'displayName', 'Noise Response' );
+            drawnow;
+
+			fprintf('Processing full contrast grating...\n');
+			[~, sFR_c_grating, sFR_s_grating] = obj.SpatialModel.LinearResponse( grating, inputX, inputY, x, y, obj.layers(iL).sRFParams(iCell), obj.layers(iL).locations(iCell,1), obj.layers(iL).locations(iCell,2));
+			LFR_grating = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(iCell), avContrast, trials(iTrial).sRate, sFR_c_grating, sFR_s_grating );
+
+			for(k = size(contrasts,2) : -1 : 1)
+				fprintf('Processing grating at contrast=%.2f...\n', contrasts(k));
+				[~, sFR_c_direct(k,:), sFR_s_direct(k,:)] = obj.SpatialModel.LinearResponse( noise + grating*contrasts(k), inputX, inputY, x, y, obj.layers(iL).sRFParams(iCell), obj.layers(iL).locations(iCell,1), obj.layers(iL).locations(iCell,2));
+				LFR_direct(k,:) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(iCell), avContrast, trials(iTrial).sRate, sFR_c_direct(k,:), sFR_s_direct(k,:) );
+				h(end+1) = plot( t, LFR_direct(k,:), '-', 'color', [0 0 1]*k/size(contrasts,2), 'lineWidth', 2, 'displayName', sprintf('Contrast=%.2f Direct', contrasts(k)) );
+                drawnow;
+
+				LFR_LC(k,:) = LFR_noise + LFR_grating * contrasts(k);
+				h(end+1) = plot( t, LFR_LC(k,:), 'r--', 'color', [1 0 0]*k/size(contrasts,2), 'lineWidth', 2, 'displayName', sprintf('Contrast=%.2f Linear Combination', contrasts(k)) );
+                drawnow;
+			end
+
+			legend( h, 'location', 'northeast' );
+			set( gca, 'fontsize', 20, 'lineWidth', 2 );
+			xlabel('Time (ms)')
+			ylabel('Firing rate (spikes/s)');
+		end
+
+
+		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = ExampleCells(obj, dataFolder, alignEvent, stabilize, saveFolder)
 			%% Show example modeled cells at locations (0,0), (0,4), (0,8), (0,12)
 			%   dataFolder:			folder containing experiment data and noise background
 			%	alignEvent:			'saccadeOn', 'saccadeOff', 'flashOn'
@@ -82,93 +158,33 @@ classdef Encoder < handle
 			end
 
 			trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'A014.mat'));
-			
-			% get example cell indices
-			eccs = [0, 4, 8, 12];
-			for( iL = size(obj.layers,2) : -1 : 1 )
-				index = obj.layers(iL).locations(:,1) >= 0 & abs( obj.layers(iL).locations(:,2) ) <= 0.5;		% right visual field and vertically within +-0.5 deg
-				for( iEcc = size(eccs,2) : -1 : 1 )
-					d2 = sum( obj.layers(iL).locations.^2, 2 );
-					if( eccs(iEcc) == 0 )
-						cellIdx{iL,iEcc} = find( d2 <= trials(1).gratingWidth^2 & index );
-						nCells{iL,iEcc} = sum( d2 <= trials(1).gratingWidth^2 );
-					else
-						w = trials(1).gratingWidth/2;
-						cellIdx{iL,iEcc} = find( (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2 & index );
-						nCells{iL,iEcc} = sum( (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2 );
-					end
-					cellIdx{iL,iEcc} = cellIdx{iL,iEcc}( randperm( size(cellIdx{iL,iEcc}, 1) ) );
-					nCellsUsed{iL,iEcc} = round( nCells{iL,iEcc} / 100 );
-					% [~, cellIdx(iL,iEcc)] = min( sum( (obj.layers(iL).locations - cLocs(iEcc,:)).^2, 2 ) );
-				end
-			end
-			% nCells = 30;
-            nTrials = 70;%30;
+			nTrials = 100;
 
+			[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells([-pi pi]*0.02, dataFolder, false);
 
-			% obj.SpatialModel = CronerKaplanRGCModel( 'dataSetToFit', 'raw', 'fitIntercept', false, 'randomizeCenterRadii', true, 'randomizeCenterSensitivities', true, 'randomizeSurroundRadii', true, 'randomizeSurroundSensitivities', true );
-			% obj.TemporalModel = TemporalRF();
-
-			%% compute responses
-% 			eccs = [0, 4, 8, 12];
-% 			SFs = [2,10];
-% % 			durs = [50, 150, 500];
-%             durs = [500];
-% % 			reports = [0,1];
-% 			presents = [0,1];	% whether grating displayed or absent
-% 			categories(1).name = 'Eccentricity';
-% 			categories(1).values = eccs;
-% 			categories(2).name = 'Spatial Frequency';
-% 			categories(2).values = SFs;
-% 			categories(3).name = 'Duration';
-% 			categories(3).values = durs;
-% 			categories(4).name = 'Present';
-% 			categories(4).values = presents;
 
 			conditions = struct( ...
-							'eccentricity',	{  0,   4,   8,  12,   0,   4,   8,  12,   0,   4,   8,  12}, ...
-							'sf',			{  0,   0,   0,   0,   2,   2,   2,   2,  10,  10,  10,  10}, ...
-							'duration',		{500}, ...
-							'present',		{  0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,   1}, ...
-							'contrast', 	{0}, ...
+							'eccentricity',	{  0,   0,    0,   4,   4,   4,   8,   8,   8 }, ...
+							'sf',			{  0,   2,   10,   0,   2,  10,   0,   2,  10 }, ...		% sf=0 means noise alone
+							'duration',		{600}, ...
 							'alignEvent',	{alignEvent} );
-			conditions([4:4:end]) = [];
 			
-			contrasts = [0.01, 0.03, 0.05, 0.07, 0.09, 0.10, 0.20, 0.30, 0.40, 0.50];
-			ecc = [conditions.eccentricity];
-			ecc = num2cell([ ecc, repmat( ecc(4:end), 1, size(contrasts,2)-1 ) ]);
-			sf = [conditions.sf];
-			sf = num2cell([ sf, repmat( sf(4:end), 1, size(contrasts,2)-1 ) ]);
-			present = num2cell([ 0 0 0, ones(1, size(sf,2)-3) ]);
-			contrasts = num2cell([ 0 0 0, reshape( repmat(contrasts, 6, 1), 1, [] ) ]);
-
-			conditions(size(sf,2)) = conditions(1);
-			[conditions.eccentricity] = ecc{:};
-			[conditions.sf] = sf{:};
-			[conditions.present] = present{:};
-			[conditions.contrast] = contrasts{:};
-			[conditions.duration] = deal(500);
-			[conditions.aligned] = deal(alignEvent);
+			[conditions.duration] = deal(600);
+			[conditions.alignEvent] = deal(alignEvent);
 
 			Eccs = unique([conditions.eccentricity]);
 
-			for( iCond = size(conditions,2) : -1 : 51 )
+			for( iCond = size(conditions,2) : -1 : 1 )
 				iEcc = find( conditions(iCond).eccentricity == Eccs );
-				contrast = conditions(iCond).contrast;
 
-				trialsIdx{iCond} = find( ... 
-										 ...%[trials.eccentricity] == eccs(1,iEcc) & ...
-										 ... %[trials.spatialFreq] == SFs(iSF) & ...
-										 abs( [trials.stimOff] - [trials.saccadeOff] - conditions(iCond).duration ) < 50 & ...
-										 true );%[trials.present] == presents(iPre) );
+				trialsIdx{iCond} = find( abs( [trials.stimOff] - [trials.saccadeOff] - (conditions(iCond).duration - 100) ) < 50, nTrials, 'first' );
 
-				idx = trialsIdx{iCond};    %fprintf('nTrials = %d\n', size(idx,2)); continue;
-                idx = idx( (1:nTrials) + 30 );% idx( 1 : min(nTrials,end) );
+				idx = trialsIdx{iCond};
 				tMax = round(max( [trials(idx).saccadeOff] + round(conditions(iCond).duration/1000*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));	% in samples
 				tMin = round(min( [trials(idx).saccadeOn] - round(0.150*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));				% in samples
 				for( iL = 4 : -1 : 1 )
 					% sFR{iCond,iL} = zeros( nCellsUsed{iL,iEcc}, tMax-tMin+1, size(idx,2) );		% 1st dim: neurons;		2nd dim: time;		3rd dim: trials;
-					sFR{iL} = zeros( nCellsUsed{iL,iEcc}, tMax-tMin+1, size(idx,2) );		% 1st dim: neurons;		2nd dim: time;		3rd dim: trials;
+					sFR{iL} = zeros( nExampleCells{iL,iEcc}, tMax-tMin+1, size(idx,2), 'single' );		% 1st dim: neurons;		2nd dim: time;		3rd dim: trials;
 				end
 				sFR_c = sFR;	%sFR_c{iCond,iL} = sFR{iCond,iL};
 				sFR_s = sFR;	%sFR_s{iCond,iL} = sFR{iCond,iL};
@@ -201,34 +217,31 @@ classdef Encoder < handle
 						y(:) = y(eyeIdx{3}(1));
 					end
 
-                    [noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(idx(k)).backgroundImage), trials(idx(k)).pixelAngle/60 );
-					grating = obj.GenerateGrating( conditions(iCond).eccentricity, trials(idx(k)).gratingWidth, conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60 );
-					noise = noise * trials(idx(k)).backgroundContrast;
-					grating = grating * contrast * conditions(iCond).present;
-                    bg = 1;
-					stimulus = noise + grating;
+					if(conditions(iCond).sf == 0)
+	                    [stimulus, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(idx(k)).backgroundImage), trials(idx(k)).pixelAngle/60 );
+	                    stimulus = stimulus * 0.5;		% noise at a contrast of 0.5
+	                else
+	                	% full contrast grating
+						[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).eccentricity, trials(idx(k)).gratingWidth, conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60 );
+					end
                     
-					% avContrast = ((s1+s2)*trials(idx(k)).backgroundContrast + s2*contrast*conditions(iCond).present) / (s1+s2);
-					avContrast = trials(idx(k)).backgroundContrast;% + contrast * conditions(iCond).present;
-					% contrastF = [ zeros(1,s1), ones(1,s2) * contrast ] + trials(idx(k)).backgroundContrast;
-					% contrastF = obj.ComputeContrasts( noise+grating+bg,  inputX, inputY, obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCells),2), [obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCells)).surroundRadii], x([eyeIdx1,eyeIdx2]), y([eyeIdx1,eyeIdx2]) );
-					% contrastF = 1;%contrast;
+					avContrast = 0.5;
 
 					for( iL = 1:4 )
+						fprintf('Ecc=%d, SF=%d, iTrials=%d/%d, iL=%d, ...', conditions(iCond).eccentricity, conditions(iCond).sf, k, size(idx,2), iL);
 						tic;
 						for( m = 1 : 3 )
-							xIdx = min(x(eyeIdx{m})) + min(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1)) - 4 <= inputX & inputX <= max(x(eyeIdx{m})) + max(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1)) + 4; %720 : 1460;
-		                    yIdx = min(y(eyeIdx{m})) + min(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2)) - 4 <= inputY & inputY <= max(y(eyeIdx{m})) + max(obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2)) + 4; %300 : 780;
+							xIdx = min(x(eyeIdx{m})) + min(obj.layers(iL).locations(idxExampleCells{iL,iEcc},1)) - 4 <= inputX & inputX <= max(x(eyeIdx{m})) + max(obj.layers(iL).locations(idxExampleCells{iL,iEcc},1)) + 4; %720 : 1460;
+		                    yIdx = min(y(eyeIdx{m})) + min(obj.layers(iL).locations(idxExampleCells{iL,iEcc},2)) - 4 <= inputY & inputY <= max(y(eyeIdx{m})) + max(obj.layers(iL).locations(idxExampleCells{iL,iEcc},2)) + 4; %300 : 780;
 	                    
-							% [sFR{iCond,iL}(:,eyeIdx{m},k), sFR_c{iCond,iL}(:,eyeIdx{m},k), sFR_s{iCond,iL}(:,eyeIdx{m},k)] = obj.SpatialModel.LinearResponse( stimulus(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx{m}), y(eyeIdx{m}), obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2));
-							[sFR{iL}(:,eyeIdx{m},k), sFR_c{iL}(:,eyeIdx{m},k), sFR_s{iL}(:,eyeIdx{m},k)] = obj.SpatialModel.LinearResponse( stimulus(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx{m}), y(eyeIdx{m}), obj.layers(iL).sRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1), obj.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2));
+							[sFR{iL}(:,eyeIdx{m},k), sFR_c{iL}(:,eyeIdx{m},k), sFR_s{iL}(:,eyeIdx{m},k)] = obj.SpatialModel.LinearResponse( stimulus(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx{m}), y(eyeIdx{m}), obj.layers(iL).sRFParams(idxExampleCells{iL,iEcc}), obj.layers(iL).locations(idxExampleCells{iL,iEcc},1), obj.layers(iL).locations(idxExampleCells{iL,iEcc},2));
 						end
 						if( lower(obj.layers(iL).name(1)) == 'm' )
-							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), avContrast, trials(idx(k)).sRate, sFR{iL}(:,:,k) );
+							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR{iL}(:,:,k) );
 						else
-							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc})), avContrast, trials(idx(k)).sRate, sFR_c{iL}(:,:,k), sFR_s{iL}(:,:,k) );
+							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR_c{iL}(:,:,k), sFR_s{iL}(:,:,k) );
 						end
-						fprintf('Contrast = %.2f, Present=%d, SF=%d, Ecc=%d, iTrials=%d/%d, iL=%d, t=%f\n', conditions(iCond).contrast, conditions(iCond).present, conditions(iCond).sf, conditions(iCond).eccentricity, k, size(idx,2), iL, toc);
+						fprintf(' | t=%f\n', toc);
 					end
 					
 				end
@@ -238,14 +251,86 @@ classdef Encoder < handle
 					time{iCond} = (tMin:tMax) / trials(idx(1)).sRate * 1000;
 				end
 
-				if(iCond == 51)% || conditions(iCond-1).contrast ~= contrast)
-					save( fullfile( dataFolder, 'figures', saveFolder, sprintf('%s-. 51-end.mat', saveFolder) ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'cellIdx', 'nCells', 'nCellsUsed' );
-					LFR = cellfun( @(x) {[]}, LFR );
+				if(mod(iCond,3) == 0)
+					lfr = LFR(iCond,:);
+					save( fullfile( dataFolder, 'figures', saveFolder, sprintf('%s-%2d.mat', saveFolder, iCond) ), 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
 				end
             end
             
-            % save( fullfile( dataFolder, 'figures', saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'sFR', 'sFR_c', 'sFR_s', 'trials', 'trialsIdx', 'cellIdx', 'nCells', 'nCellsUsed' );
-            % save( fullfile( dataFolder, 'figures', saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'cellIdx', 'nCells', 'nCellsUsed' );
+            save( fullfile( dataFolder, 'figures', saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
+		end
+
+
+		function [idxExampleCells, idxAllCells, nExampleCells, nAllCells] = GetExampleCells(obj, angularRange, dataFolder, isPlot)
+			if(~exist('angularRange', 'var') || isempty(angularRange))
+				angularRange = [-pi pi] * 0.02;	% by default, a sector covering 2% of the area at the temporal field
+			end
+			if( ~exist('dataFolder', 'var') || isempty(dataFolder) )
+				dataFolder = '../../data/';
+            end
+			if(~exist('isPlot', 'var') || isempty(isPlot))
+				isPlot = true;
+			end
+
+            trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'A014.mat'));
+            iTrial = find([trials.eccentricity] == 4 & [trials.spatialFreq] == 2, 1, 'first');
+
+			eccs = [0, 4, 8, 12];
+			for( iL = size(obj.layers,2) : -1 : 1 )
+				angles = cart2pol(obj.layers(iL).locations(:,1), obj.layers(iL).locations(:,2));
+				index = angularRange(1) <= angles & angles < angularRange(2);
+				
+				for( iEcc = size(eccs,2) : -1 : 1 )
+					d2 = sum( obj.layers(iL).locations.^2, 2 );
+					if( eccs(iEcc) == 0 )
+						idx = d2 <= trials(1).gratingWidth^2;
+					else
+						w = trials(1).gratingWidth/2;
+						idx = (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2;
+					end
+
+					idxAllCells{iL,iEcc} = find(idx);
+					nAllCells{iL,iEcc} = length(idxAllCells{iL,iEcc});
+					
+					idxExampleCells{iL,iEcc} = find( idx & index );
+					nExampleCells{iL,iEcc} = length(idxExampleCells{iL,iEcc});
+				end
+			end
+
+			if(isPlot)
+				[noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(iTrial).backgroundImage), trials(iTrial).pixelAngle/60 );
+				grating0 = obj.GenerateGrating( 0, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
+				grating4 = obj.GenerateGrating( 4, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
+				grating8 = obj.GenerateGrating( 8, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
+				
+				figure('NumberTitle', 'off', 'name', 'Example Cells', 'color', 'w');
+				pause(0.1);
+				jf = get(handle(gcf),'javaframe');
+				jf.setMaximized(1);
+				pause(1);
+				colors = {[1 0 0], [0 0 1], [1 0 1], [0 1 1]};
+				for(iL = 1 : 4)
+					subplot(2,2,iL)
+					imshow( (noise+grating0+grating4+grating8)*0.25 + 0.5, 'xdata', inputX([1 end]), 'ydata', inputY([1 end]) ); hold on;
+					titleTxt = [obj.layers(iL).name ' | nCells='];
+					for(iEcc = 1 : size(eccs,2))
+						plot( obj.layers(iL).locations(idxAllCells{iL,iEcc}, 1), obj.layers(iL).locations(idxAllCells{iL,iEcc}, 2), '.', 'color', colors{iL} );
+						plot( obj.layers(iL).locations(idxExampleCells{iL,iEcc}, 1), obj.layers(iL).locations(idxExampleCells{iL,iEcc}, 2), '.', 'color', colors{iL}/2 );
+						titleTxt = [titleTxt num2str(nAllCells{iL,iEcc}) ', '];
+					end
+					title(titleTxt(1:end-2));
+					set( gca, 'xlim', [-1 1]*max(eccs)*1.1, 'ylim', [-1 1]*max(eccs)*1.1, 'ydir', 'normal', 'fontsize', 20, 'lineWidth', 2 );
+					if(iL == 1 || iL == 3)
+						ylabel('Vertical position (deg)');
+					end
+					if(iL == 3 || iL == 4)
+						xlabel('Horizontal position (deg)');
+					end
+				end
+
+				%% display properties
+
+			end
 		end
 
 
@@ -372,25 +457,25 @@ classdef Encoder < handle
 			set( gca, 'lineWidth', 2, 'fontsize', 16 );
 
 			% cell spatial sensitivity function
-			colors = {[1 0 0], [0 0 1], 'm', 'c'};
+			colors = {[1 0 0], [0 0 1], [1 0 1], [0 1 1]};
 			sf = 0.1:0.1:40;
-			for(iEcc = 1:size(Eccs,2))
-				subplot(3, size(Eccs,2), size(Eccs,2)+iEcc); hold on; h = [];
-				for(iL = 1 : 4)
+			for(iL = 1 : 4)
+				subplot(3, 4, 4+iL); hold on; h = [];
+				for(iEcc = 1:size(Eccs,2))
 					nCells = size(FR{iEcc,iL},1);
 					idx = cellIdx{iL,iEcc}(1:nCells);
 					m = mean( abs( obj.SpatialModel.SpatialSensitivity( obj.layers(iL).sRFParams(idx), sf ) ), 1 );
 					sem = std( abs( obj.SpatialModel.SpatialSensitivity( obj.layers(iL).sRFParams(idx), sf ) ), [], 1 ) / sqrt(nCells);
-					h(iL) = plot( sf, m, 'color', colors{iL}, 'lineWidth', 2, 'displayName', obj.layers(iL).name );
 					fill( [sf, sf(end:-1:1)], [m-sem, m(end:-1:1)+sem(end:-1:1)], 'k', 'FaceColor', colors{iL}, 'LineStyle', 'none', 'FaceAlpha', 0.5 );
+					h(iEcc) = plot( sf, m, 'color', colors{iL}*(size(Eccs,2)-iEcc+1)/size(Eccs,2), 'lineWidth', 2, 'displayName', sprintf('Ecc = %d', conditions(iEcc).eccentricity) );
 				end
 				set( gca, 'xscale', 'log', 'yscale', 'log', 'lineWidth', 2, 'fontsize', 16 );
 				plot( [2 2], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
 				plot( [10 10], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
-				if(iEcc==nRows), legend(h); end
+				set(legend(h), 'location', 'southwest');
 				xlabel('Spatial frequency (CPD)');
-				if(iEcc==1), ylabel('Sensitivity'); end
-				title( sprintf('Ecc = %d', conditions(iEcc).eccentricity) );
+				if(iL==1), ylabel('Sensitivity'); end
+				title(obj.layers(iL).name);
 			end
 
 			% cell temporal sensitivity function
@@ -607,7 +692,7 @@ classdef Encoder < handle
 		end
 
 
-		function [tTicks, accAUCm, accAUCsd, segAUCm, segAUCsd, frAcc, frSeg, Weights] = TrialPredictWithAUC(obj, classifier, FR, time, conditions, trials, trialsIdx, cellIdx, applyRectify, alignEvent, LBOffset, UBOffset, tStep, tWin, saveFolder)
+		function [tTicks, accAUCm, accAUCsd, segAUCm, segAUCsd, frAcc, frSeg, Weights] = TrialPredictWithAUC(obj, classifier, FR, time, conditions, trials, trialsIdx, nCells, cellIdx, cell2AnalyzeIdx, applyRectify, alignEvent, LBOffset, UBOffset, tStep, tWin, saveFolder)
 			if( nargin() < 10 || isempty(applyRectify) )
 				applyRectify = true;
 			end
@@ -646,8 +731,17 @@ classdef Encoder < handle
 			frAcc = cell(size(conditions,2),5);
 			frSeg = frAcc;
 
-			cellNumAmplifier = 100;		% only 1 percent of cells was sampled
-			areaAmplifier = [4.800, 25.039, 50.182];	% only an area of +-0.5 deg vertically in right visual field was sampled for each eccentricity
+			%% previously, data were collected with a vertical range of [-0.5, 0.5], here we select those cells within a sector
+			for(iCond = 1 : size(FR,1))
+				iEcc = find( conditions(iCond).eccentricity == Eccs );
+				for(iL = 1 : size(FR,2))
+					FR{iCond,iL} = FR{iCond,iL}( cell2AnalyzeIdx{iL,iEcc}, :, : );
+				end
+			end
+
+			cellNumAmplifier = cell2mat(nCells) ./ cellfun(@(x) size(x,1), cell2AnalyzeIdx);		% inverse of proportion of cells used
+			cellNumAmplifier(5,:) = mean(cellNumAmplifier,1);
+			areaAmplifier = [1 1 1];	% it's already accounted for in nCells and nCellsUsed	 % [4.800, 25.039, 50.182];	% only an area of +-0.5 deg vertically in right visual field was sampled for each eccentricity
 
 
 			for(iTick = 1 : size(tTicks,2))
@@ -664,8 +758,8 @@ classdef Encoder < handle
 								tmpFR(tmpFR<0) = 0;
 	                        end
 							
-	                        frAcc{iCond,iL} = nan(size(FR{iCond,iL},1), tTicks(iTick) - LBOffset + 1, nTrials);
-	                        frSeg{iCond,iL} = nan(size(FR{iCond,iL},1), tWin+1, nTrials);
+	                        frAcc{iCond,iL} = nan(size(FR{iCond,iL},1), tTicks(iTick) - LBOffset + 1, nTrials, 'single');
+	                        frSeg{iCond,iL} = nan(size(FR{iCond,iL},1), tWin+1, nTrials, 'single');
 							for( iTrial = 1 : nTrials )
 								s = find( time{iCond} >= round( ( trials(trialIdx(iTrial)).(alignEvent) - trials(trialIdx(iTrial)).(conditions(iCond).alignEvent) ) / trials((trialIdx(iTrial))).sRate * 1000 ), 1, 'first' );
 								frAcc{iCond,iL}(:,:,iTrial) = tmpFR(:, s+(LBOffset:tTicks(iTick)), iTrial);
@@ -698,10 +792,10 @@ classdef Encoder < handle
 									w = ones(1,size(data,2));		% uniform temporal weight
 									w = w / sum(w);
 									y = w * shiftdim(nanmean(data,1),1);
-									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
-									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
 									% if(tTicks(iTick) <= 50)
-										thresholdAcc{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
+										thresholdAcc{iCond,iL} = prctile( y(T==0), 90 + max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
 									% end
 									accAUCm(iL,k-1,iEcc,iTick) = sum( (y > thresholdAcc{iCond,iL}) == T & T == 1 ) / sum(T==1);	% true positive rate of prediction
 									accAUCsd(iL,k-1,iEcc,iTick) = 0;
@@ -710,11 +804,11 @@ classdef Encoder < handle
 									w = ones(1,size(data,2));		% uniform temporal weight
 									w = w / sum(w);
 									y = w * shiftdim(nanmean(data,1),1);
-									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
-									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
 									y = (y-min(y)) / (max(y)-min(y));
 									% if(tTicks(iTick) <= 50)
-										thresholdSeg{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
+										thresholdSeg{iCond,iL} = prctile( y(T==0), 90 + max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
 									% end
 									segAUCm(iL,k-1,iEcc,iTick) = sum( (y > thresholdSeg{iCond,iL}) == T & T == 1 ) / sum(T==1);	% true positive rate of prediction
 									segAUCsd(iL,k-1,iEcc,iTick) = 0;
@@ -727,13 +821,13 @@ classdef Encoder < handle
 									if(iL ~= 5)
 										dataOn = cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, iL-1} );	% catenate in the trials dimension
 										dataOff = cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, iL} );	% catenate in the trials dimension
-										rfLocOn = obj.layers(iL-1).locations( cellIdx{iL-1,iEcc}(1:size(dataOn,1)), : );
-										rfLocOff = obj.layers(iL).locations( cellIdx{iL,iEcc}(1:size(dataOff,1)), : );
+										rfLocOn = obj.layers(iL-1).locations( cellIdx{iL-1,iEcc}(cell2AnalyzeIdx{iL-1,iEcc}), : );
+										rfLocOff = obj.layers(iL).locations( cellIdx{iL,iEcc}(cell2AnalyzeIdx{iL,iEcc}), : );
 									else
 										dataOn = cat( 1, cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 1} ), cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 3} ) );
 										dataOff = cat( 1, cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 2} ), cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, 4} ) );
-										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(1:size(frAcc{iEcc,1},1)), : ); obj.layers(3).locations( cellIdx{3,iEcc}(1:size(frAcc{iEcc,3},1)), : )];
-										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(1:size(frAcc{iEcc,2},1)), : ); obj.layers(4).locations( cellIdx{4,iEcc}(1:size(frAcc{iEcc,4},1)), : )];
+										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(cell2AnalyzeIdx{1,iEcc}), : ); obj.layers(3).locations( cellIdx{3,iEcc}(cell2AnalyzeIdx{3,iEcc}), : )];
+										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(cell2AnalyzeIdx{2,iEcc}), : ); obj.layers(4).locations( cellIdx{4,iEcc}(cell2AnalyzeIdx{4,iEcc}), : )];
 									end
 									wOn = cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOn.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;		% column vector
 									wOff = -cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOff.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;
@@ -742,8 +836,8 @@ classdef Encoder < handle
 									y = w * squeeze(nanmean([dataOn; dataOff],2));
 
 									T = [zeros(1,nTrials), ones(1,nTrials)];
-									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
-									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
 									% if(tTicks(iTick) <= 50)
 										thresholdAcc{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
 									% end
@@ -753,13 +847,13 @@ classdef Encoder < handle
 									if(iL ~= 5)
 										dataOn = cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, iL-1} );	% catenate in the trials dimension
 										dataOff = cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, iL} );	% catenate in the trials dimension
-										rfLocOn = obj.layers(iL-1).locations( cellIdx{iL-1,iEcc}(1:size(dataOn,1)), : );
-										rfLocOff = obj.layers(iL).locations( cellIdx{iL,iEcc}(1:size(dataOff,1)), : );
+										rfLocOn = obj.layers(iL-1).locations( cellIdx{iL-1,iEcc}(cell2AnalyzeIdx{iL-1,iEcc}), : );
+										rfLocOff = obj.layers(iL).locations( cellIdx{iL,iEcc}(cell2AnalyzeIdx{iL,iEcc}), : );
 									else
 										dataOn = cat( 1, cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 1} ), cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 3} ) );
 										dataOff = cat( 1, cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 2} ), cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, 4} ) );
-										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(1:size(frSeg{iEcc,1},1)), : ); obj.layers(3).locations( cellIdx{3,iEcc}(1:size(frSeg{iEcc,3},1)), : )];
-										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(1:size(frSeg{iEcc,2},1)), : ); obj.layers(4).locations( cellIdx{4,iEcc}(1:size(frSeg{iEcc,4},1)), : )];
+										rfLocOn = [obj.layers(1).locations( cellIdx{1,iEcc}(cell2AnalyzeIdx{1,iEcc}), : ); obj.layers(3).locations( cellIdx{3,iEcc}(cell2AnalyzeIdx{3,iEcc}), : )];
+										rfLocOff = [obj.layers(2).locations( cellIdx{2,iEcc}(cell2AnalyzeIdx{2,iEcc}), : ); obj.layers(4).locations( cellIdx{4,iEcc}(cell2AnalyzeIdx{4,iEcc}), : )];
 									end
 									wOn = cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOn.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;		% column vector
 									wOff = -cos( 2*pi*SFs(iSF) * (sqrt(sum(rfLocOff.^2,2))' - Eccs(iEcc)) ) / 2 + 0.5;
@@ -768,8 +862,8 @@ classdef Encoder < handle
 									y = w * squeeze(nanmean([dataOn; dataOff],2));
 
 									T = [zeros(1,nTrials), ones(1,nTrials)];
-									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
-									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
 									% if(tTicks(iTick) <= 50)
 										thresholdSeg{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
 									% end
@@ -793,8 +887,8 @@ classdef Encoder < handle
 									end
 									w = w / sum(w);
 									y = w * shiftdim(nanmean(data,1),1);
-									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
-									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
 									% if(tTicks(iTick) <= 50)
 										thresholdAcc{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
 									% end
@@ -813,8 +907,52 @@ classdef Encoder < handle
 									end
 									w = w / sum(w);
 									y = w * shiftdim(nanmean(data,1),1);
-									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
-									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									% if(tTicks(iTick) <= 50)
+										thresholdSeg{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
+									% end
+									segAUCm(iL,k-1,iEcc,iTick) = sum( (y > thresholdSeg{iCond,iL}) == T & T == 1 ) / size(y(T==1),2);	% true positive rate of prediction
+									segAUCsd(iL,k-1,iEcc,iTick) = 0;
+								end
+
+							case 'thresholding-sw_uni-tw_dprime'
+								%% ROC with thresholding, uniform spatial weights, d-prime as temporal weights
+								if( k > 1 )
+									T = [zeros(1,nTrials), ones(1,nTrials)];
+									data = cat( 3, frAcc{iEcc+([1 k]-1)*nEccs, iL} );	% catenate in the trials dimension
+									w = zeros(1,size(data,2));		% temporal weight by seperation of two distributions
+									for( iT = 1 : size(data,2) )
+										r = squeeze( mean(data(:,iT,:), 1) )';	% average across neurons
+										if( any(isnan(r)) )
+											continue;
+										end
+										w(iT) = max(0, (mean(r(T==1)) - mean(r(T==0))) / sqrt(var(r(T==1) + var(r(T==0)))));
+									end
+									w = w / sum(w);
+									y = w * shiftdim(nanmean(data,1),1);
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									% if(tTicks(iTick) <= 50)
+										thresholdAcc{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
+									% end
+									accAUCm(iL,k-1,iEcc,iTick) = sum( (y > thresholdAcc{iCond,iL}) == T & T == 1 ) / size(y(T==1),2);	% true positive rate of prediction
+									accAUCsd(iL,k-1,iEcc,iTick) = 0;
+									
+									data = cat( 3, frSeg{iEcc+([1 k]-1)*nEccs, iL} );	% catenate in the trials dimension
+									w = zeros(1,size(data,2));		% temporal weight by seperation of two distributions
+									for( iT = 1 : size(data,2) )
+										r = squeeze( mean(data(:,iT,:), 1) )';	% average across neurons
+										if( any(isnan(r)) )
+											continue;
+										end
+										[~,w(iT)] = ttest2( r(T==0), r(T==1) );
+										w(iT) = 1 - w(iT);			% smaller p-value corresponds to greater weight
+									end
+									w = w / sum(w);
+									y = w * shiftdim(nanmean(data,1),1);
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc)) + mean(y(T==1));	% compensate for the low sampling
 									% if(tTicks(iTick) <= 50)
 										thresholdSeg{iCond,iL} = prctile( y(T==0), 90 );%+ max(0,5*tTicks(iTick)/max(tTicks)) );		% set threshold at the level giving 10%~5% false alarm rate
 									% end
@@ -837,8 +975,8 @@ classdef Encoder < handle
 										sd0 = std(r(T==0));
 										m1 = mean(r(T==1));
 										sd1 = std(r(T==1));
-										sd0 = sd0 / sqrt(cellNumAmplifier * areaAmplifier(iEcc));	% compensate for the low sampling
-										sd1 = sd1 / sqrt(cellNumAmplifier * areaAmplifier(iEcc));	% compensate for the low sampling
+										sd0 = sd0 / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc));	% compensate for the low sampling
+										sd1 = sd1 / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc));	% compensate for the low sampling
 										logP = logP + log(normpdf(r,m1,sd1)) - log(normpdf(r,m0,sd0));
 									end
 									accAUCm(iL,k-1,iEcc,iTick) = sum( (logP >= 0) == T  ) / size(T,2);	% correct rate
@@ -855,8 +993,8 @@ classdef Encoder < handle
 										sd0 = std(r(T==0));
 										m1 = mean(r(T==0));
 										sd1 = std(r(T==0));
-										sd0 = sd0 / sqrt(cellNumAmplifier * areaAmplifier(iEcc));	% compensate for the low sampling
-										sd1 = sd1 / sqrt(cellNumAmplifier * areaAmplifier(iEcc));	% compensate for the low sampling
+										sd0 = sd0 / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc));	% compensate for the low sampling
+										sd1 = sd1 / sqrt(cellNumAmplifier(iL,iEcc) * areaAmplifier(iEcc));	% compensate for the low sampling
 										logP = logP + log(normpdf(r,m1,sd1)) - log(normpdf(r,m0,sd0));
 									end
 									segAUCm(iL,k-1,iEcc,iTick) = sum( (logP >= 0) == T ) / size(T,2);	% correct rate
@@ -1218,7 +1356,10 @@ classdef Encoder < handle
 					end
 				end
 
-				if( ~isempty(saveFolder) && exist(saveFolder,'dir') )
+				if( ~isempty(saveFolder) )
+					if( ~exist(saveFolder,'dir') )
+						mkdir(saveFolder);
+					end
 					saveas( gcf, fullfile( saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction with %s, %s+[%d,%d], %s.fig', classifier, alignEvent, LBOffset, UBOffset, layerName ) ) );
 					saveas( gcf, fullfile( saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction with %s, %s+[%d,%d], %s.png', classifier, alignEvent, LBOffset, UBOffset, layerName ) ) );
 					% save(tTicks, accAUC, segAUC, glmAccAUCm, glmAccAUCsd, glmSegAUCm, glmSegAUCsd, frAcc, frSeg);
@@ -1246,29 +1387,36 @@ classdef Encoder < handle
 				dataFolder = '../../data/figures';
 			end
 			
-			contrasts = [0.01, 0.03, 0.05, 0.07, 0.09, 0.10, 0.20, 0.30, 0.40, 0.50];
+			contrasts = [0.01, 0.03, 0.05, 0.07, 0.09, 0.10, 0.20, 0.30];%, 0.40, 0.50];
             layerNames = {'POn', 'POff', 'MOn', 'MOff', 'LayerAverage'};
-			if( exist( fullfile(dataFolder, saveFolder, 'Data.mat') ) )
-				load( fullfile(dataFolder, saveFolder, 'Data.mat') );
+			if( exist( fullfile(saveFolder, 'PerformanceData.mat') ) )
+				load( fullfile(saveFolder, 'PerformanceData.mat') );
 			else
-				folders = cellfun( @(c) {sprintf('Real ratio cells, avContrast=0.5, contrast=%.2f, same 30 trials; Hs=1', c)}, num2cell(contrasts) );
-				for( iFolder = 1 : size(folders,2) )
-					fprintf( 'Processing %s ...\n', fullfile(dataFolder, folders{iFolder}, [folders{iFolder}, '.mat']) );
-					load( fullfile(dataFolder, folders{iFolder}, [folders{iFolder}, '.mat']), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', "cellIdx" );
-					[tTicks, accTPRm(:,:,:,:,iFolder), accTPRsd(:,:,:,:,iFolder), segTPRm(:,:,:,:,iFolder), segTPRsd(:,:,:,:,iFolder), frAcc(:,:,iFolder), frSeg(:,:,iFolder)] = obj.TrialPredictWithAUC(classifier, LFR, time, conditions, trials, trialsIdx, cellIdx, true, 'saccadeOff', 0, 500, [], [], fullfile(dataFolder, folders{iFolder}));
+				fprintf( 'Loading %s ...\n', fullfile(dataFolder, 'LFR.mat') );
+                load( fullfile(dataFolder, 'LFR.mat') );
+				% folders = cellfun( @(c) {sprintf('Real ratio cells, avContrast=0.5, contrast=%.2f, same 30 trials; Hs=1', c)}, num2cell(contrasts) );
+				% for( iFolder = 1 : size(folders,2) )
+				for( iContrast = 1 : size(contrasts,2) )
+					% fprintf( 'Processing %s ...\n', fullfile(dataFolder, folders{iFolder}, [folders{iFolder}, '.mat']) );
+					fprintf( 'Processing contrast=%.2f ...\n', contrasts(iContrast) );
+					% load( fullfile(dataFolder, folders{iFolder}, [folders{iFolder}, '.mat']), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', "cellIdx" );
+					condIdx = [1:3, (4:9)+(iContrast-1)*6];
+					tmpConditions = conditions(condIdx);
+					[tmpConditions(1:3).sf] = deal(2);
+					[tTicks, accTPRm(:,:,:,:,iContrast), accTPRsd(:,:,:,:,iContrast), segTPRm(:,:,:,:,iContrast), segTPRsd(:,:,:,:,iContrast), frAcc(:,:,iContrast), frSeg(:,:,iContrast)] = obj.TrialPredictWithAUC(classifier, LFR(condIdx,:), time(1:9), tmpConditions, trials, trialsIdx, nCells, cellIdx, cell2AnalyzeIdx, true, 'saccadeOff', 0, 500, [], [], fullfile(saveFolder, sprintf('contrast=%.2f',contrasts(iContrast))));
 					drawnow;
 					pause(3);
 					for(iL = 5:-1:1)
-						saveas( gcf, fullfile( dataFolder, saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction with %s, %s+[%d,%d], %s.fig', classifier, 'saccadeOff', 0, 500, layerNames{iL} ) ) );
-						saveas( gcf, fullfile( dataFolder, saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction with %s, %s+[%d,%d], %s.png', classifier, 'saccadeOff', 0, 500, layerNames{iL} ) ) );
+% 						saveas( gcf, fullfile( saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction with %s, %s+[%d,%d], %s.fig', classifier, 'saccadeOff', 0, 500, layerNames{iL} ) ) );
+% 						saveas( gcf, fullfile( saveFolder, sprintf( 'Time Course of Trial-by-Trial Prediction with %s, %s+[%d,%d], %s.png', classifier, 'saccadeOff', 0, 500, layerNames{iL} ) ) );
 						close(gcf);
 					end
 					close all;
 				end
-				if( ~exist( fullfile(dataFolder, saveFolder) ) )
-					mkdir(fullfile(dataFolder, saveFolder));
+				if( ~exist( saveFolder ) )
+					mkdir(saveFolder);
 				end
-				save( fullfile(dataFolder, saveFolder, 'Data.mat'), 'tTicks', 'accTPRm', 'accTPRsd', 'segTPRm', 'segTPRsd', 'frAcc', 'frSeg', 'conditions' );
+				save( fullfile(saveFolder, 'PerformanceData.mat'), 'tTicks', 'accTPRm', 'accTPRsd', 'segTPRm', 'segTPRsd', 'frAcc', 'frSeg', 'conditions' );
 			end
 
 			Eccs = unique([conditions.eccentricity]);
@@ -1276,8 +1424,11 @@ classdef Encoder < handle
 			SFs = unique([conditions.sf]);
 			SFs(SFs == 0) = [];
 			nSFs = size(SFs,2);
-			durs = [50 150 300 500];
-			durs = [50 75 150 300 500];
+			if( ~exist('durs', 'var') )
+				durs = [50 150 300 500];
+				durs = [1 50 75 150 300 500];
+			end
+            nDurs = size(durs,2);
 			durOffset = 50 + 7;		% resonse delay of 50 ms + online saccade off later by 7 ms 
 			layerNames = {'POn', 'POff', 'MOn', 'MOff', 'LayerAverage'};
 
@@ -1289,6 +1440,7 @@ classdef Encoder < handle
 			else
 				fitThreshold = true;false;
 			end
+			CHANCE = chance;
 			for( iL = 1 : 5 )
 				colors = { [0 1 0], [0 0.7 0], [0 0.4 0], [0 0.1 0]; ...	% for 2cpd
 						   [1 0 0], [0.7 0 0], [0.4 0 0], [0.1 0 0] };		% for 10cpd
@@ -1302,14 +1454,16 @@ classdef Encoder < handle
 				for(iSF = 1 : nSFs)
 					for(iEcc = 1 : nEccs)
 						subplot( nSFs, nEccs, (iSF-1)*nEccs + iEcc ); hold on;
-						for( iDur = 1 : size(durs,2) )
+						for( iDur = 1 : nDurs )
+							chance = CHANCE - max(0, durs(iDur)/500*0.05);
+							targetRatio = (1+chance)/2;
 							[~,iTick] = min(abs(tTicks - (durs(iDur)+durOffset)));
-							h(iDur) = plot( contrasts, squeeze(accTPRm(iL,iSF,iEcc,iTick,:)), 'o', 'color', colors{iSF,iDur}, 'displayName', sprintf('%d ms', durs(iDur)), 'markersize', 8, 'lineWidth', 3 );
-							plot( contrasts, squeeze(accTPRm(iL,iSF,iEcc,iTick,:)), '--', 'color', colors{iSF,iDur}, 'displayName', sprintf('%d ms', durs(iDur)), 'lineWidth', 1 );
+							h(iDur) = plot( contrasts, squeeze(accTPRm(iL,iSF,iEcc,iTick,:)), 'o', 'color', colors{iSF,1}*(nDurs-iDur+1)/nDurs, 'displayName', sprintf('%d ms', durs(iDur)), 'markersize', 8, 'lineWidth', 3 );
+							plot( contrasts, squeeze(accTPRm(iL,iSF,iEcc,iTick,:)), '--', 'color', colors{iSF,1}*(nDurs-iDur+1)/nDurs, 'displayName', sprintf('%d ms', durs(iDur)), 'lineWidth', 1 );
 
 							if(fitThreshold)
 								if( ~any(isnan(accTPRm(iL,iSF,iEcc,iTick,:))) )
-									nTrials = 30;%size(frSeg{1},3);
+									nTrials = 100;%size(frSeg{1},3);
 									hits = zeros(1, nTrials*size(contrasts,2));
 									for( iCont = 1 : size(contrasts,2) )
 										hits( (iCont-1)*nTrials + ( 1 : round(nTrials * accTPRm(iL,iSF,iEcc,iTick,iCont)) ) ) = 1;
@@ -1324,9 +1478,9 @@ classdef Encoder < handle
 									y = psyfun( x, par(1), par(2), chance, 0, false, true, 'normal' );
 									yLow = psyfun( x, par(1) - stdPar(1), par(2) - stdPar(2), 0.1, 0, false, true, 'normal' );
 									yUp = psyfun( x, par(1) + stdPar(1), par(2) + stdPar(2), 0.1, 0, false, true, 'normal' );
-									plot( x, y, '-', 'LineWidth', 2.5, 'color', colors{iSF,iDur}, 'DisplayName', sprintf('%d cpd, %d ms', SFs(iSF), durs(iDur)) );
+									plot( x, y, '-', 'LineWidth', 2.5, 'color', colors{iSF,1}*(nDurs-iDur+1)/nDurs, 'DisplayName', sprintf('%d cpd, %d ms', SFs(iSF), durs(iDur)) );
 									% set( fill( [x(2:end) x(end:-1:2)], [yLow(2:end) yUp(end:-1:2)], colors{iSF,iDur} ), 'LineStyle', 'none', 'FaceAlpha', 0.5 );
-									plot( [1, 1] * thresh, [0, targetRatio], '--', 'color', colors{iSF,iDur}, 'lineWidth', 2 );
+									plot( [1, 1] * thresh, [0, targetRatio], '--', 'color', colors{iSF,1}*(nDurs-iDur+1)/nDurs, 'lineWidth', 2 );
 									% set( fill( [-1, 1, 1, -1]*stdThresh + thresh, [0, 0, targetRatio, targetRatio], colors{iSF,iDur} ), 'LineStyle', 'none', 'FaceAlpha', 0.5 );
 
 									Thresholds(iL,iSF,iEcc,iDur) = thresh;
@@ -1349,17 +1503,17 @@ classdef Encoder < handle
                         if(iSF == 1)
                             title(sprintf('Ecc = %d', Eccs(iEcc)));
                         end
-						set( gca, 'xlim', [0 0.6], 'ylim', [0 1], 'lineWidth', 2, 'fontsize', 18 );
+						set( gca, 'xlim', [0.01 0.6], 'xscale', 'log', 'ylim', [0 1], 'lineWidth', 2, 'fontsize', 18 );
 						drawnow;
 					end
 				end
-				saveas( gcf, fullfile( dataFolder, saveFolder, sprintf('Psychometric Curve - Prediction by AverageThresholding - %s.fig', layerNames{iL}) ) );
-				saveas( gcf, fullfile( dataFolder, saveFolder, sprintf('Psychometric Curve - Prediction by AverageThresholding - %s.png', layerNames{iL}) ) );
+				saveas( gcf, fullfile( saveFolder, sprintf('Psychometric Curve - Prediction by AverageThresholding - %s.fig', layerNames{iL}) ) );
+				saveas( gcf, fullfile( saveFolder, sprintf('Psychometric Curve - Prediction by AverageThresholding - %s.png', layerNames{iL}) ) );
 			end
 
 			if(fitThreshold)
-				%save( fullfile(dataFolder, saveFolder, 'Data.mat'), 'tTicks', 'accTPRm', 'accTPRsd', 'segTPRm', 'segTPRsd', 'frAcc', 'frSeg', 'conditions', 'Thresholds', 'ThresholdsSTD' );
-                save( fullfile(dataFolder, saveFolder, 'Data.mat'), 'tTicks', 'accTPRm', 'accTPRsd', 'segTPRm', 'segTPRsd', 'conditions', 'Thresholds', 'ThresholdsSTD' );
+				%save( fullfile(dataFolder, saveFolder, 'PerformanceData.mat'), 'tTicks', 'accTPRm', 'accTPRsd', 'segTPRm', 'segTPRsd', 'frAcc', 'frSeg', 'conditions', 'Thresholds', 'ThresholdsSTD' );
+                save( fullfile(saveFolder, 'PerformanceData.mat'), 'tTicks', 'accTPRm', 'accTPRsd', 'segTPRm', 'segTPRsd', 'conditions', 'durs', 'Thresholds', 'ThresholdsSTD' );
 			end
 
 
@@ -1395,15 +1549,15 @@ classdef Encoder < handle
                     if(iSF == 1)
                         title(layerNames{iL});
                     end
-					set( gca, 'xlim', [0 600], 'xtick', durs, 'xscale', 'log', 'yscale', 'log', 'ydir', 'reverse', 'lineWidth', 2, 'fontsize', 18 );
+					set( gca, 'xlim', [0 600], 'xtick', [1 50 150 500], 'ylim', [0.008 1], 'ytick', [0.01, 0.05, 0.1 0.5], 'xscale', 'log', 'yscale', 'log', 'ydir', 'reverse', 'lineWidth', 2, 'fontsize', 18 );
 					if( max(get(gca,'ylim')) > 1 )
 						set( gca, 'ylim', [0 1] );
 					end
 					drawnow;
 				end
 			end
-			saveas( gcf, fullfile( dataFolder, saveFolder, sprintf('Contrast Threshold - Prediction by AverageThresholding - %s.fig', layerNames{iL}) ) );
-			saveas( gcf, fullfile( dataFolder, saveFolder, sprintf('Contrast Threshold - Prediction by AverageThresholding - %s.png', layerNames{iL}) ) );
+			saveas( gcf, fullfile( saveFolder, sprintf('Contrast Threshold - Prediction by AverageThresholding - %s.fig', layerNames{iL}) ) );
+			saveas( gcf, fullfile( saveFolder, sprintf('Contrast Threshold - Prediction by AverageThresholding - %s.png', layerNames{iL}) ) );
 			
 		end
 
@@ -1499,5 +1653,108 @@ classdef Encoder < handle
 				set( gca, 'xlim', [-radius radius], 'ylim', [-radius radius], 'fontsize', 20, 'visible', 'off', 'color', 'k', 'xcolor', 'w', 'ycolor', 'w' );
 			end
 		end
+
+
+		%% Video4ExampleCells
+		function Video4ExampleCells(arg)
+			%%
+			Eccs = unique([conditions.eccentricity]);
+			nEccs = size(Eccs,2);
+			SFs = [0, 2, 10];
+			contrasts = [0, 0.5, 0.5];
+			colors = { [1 0 0], [0 0 1], [1 0 1], [0 1 1] };
+
+			iTrial = 1;
+			fr = reshape( cat( 1, LFR{ [conditions.contrast] == contrasts(1) | [conditions.contrast] == contrasts(2), : } ), 1, [] );
+			fr(fr<0) = 0;
+			fr(isnan(fr)) = [];
+			frMax = std(fr)*5;
+
+			%% get average radii
+			for(iL = 4:-1:1)
+				for(iEcc = size(Eccs,2) : -1 : 1)
+					Radii(iL,iEcc) = mean( [encoder.layers(iL).sRFParams(cellIdx{iL,iEcc}).centerRadii] ) / 2;
+				end
+			end
+
+			%%
+			for( iCont = 1 : size(contrasts,2) )
+
+				filename = sprintf('../../Data/videos/contrast=%.2f, SF=%d', contrasts(iCont), SFs(iCont));
+				writerObj = VideoWriter(filename, 'MPEG-4');
+				open(writerObj);
+
+				figure( 'NumberTitle', 'off', 'color', 'k', 'name', sprintf('Movie: contrast=%0.2f, SF=%d', contrasts(iCont), SFs(iCont)) );
+				pause(0.1);
+				jf = get(handle(gcf),'javaframe');
+				jf.setMaximized(1);
+				pause(0.5);
+				for( iEcc = 1 : size(Eccs,2) )
+					for( iL = 1 : 4 )
+						subplot(nEccs, 4, (iEcc-1)*4 + iL); hold on;
+						set( gca, 'fontsize', 20, 'linewidth', 2, 'color', 'k', 'XColor', 'w', 'YColor', 'w' );
+						axis equal;
+					end
+				end
+
+				tStart = -50;
+				for( iTick = find(time{1} == tStart) : size(time{1},2) )
+
+					% create graphic objects
+					if( iTick == find(time{1} == tStart) )
+						for( iEcc = 1 : size(Eccs,2) )
+							for( iL = 1 : 4 )
+								subplot(nEccs, 4, (iEcc-1)*4 + iL);
+								title(sprintf('%s | Ecc=%d | t=%dms', encoder.layers(iL).name, Eccs(iEcc), time{1}(iTick)), 'color', 'w');
+								for( iCell = 1 : nCellsUsed{iL,iEcc} )
+									r = Radii(iL,iEcc);
+									iCond = [conditions.contrast] == contrasts(iCont) & [conditions.eccentricity] == Eccs(iEcc) & [conditions.sf] == SFs(iCont);
+									% h{iTick,iL,iEcc}(iCell) = rectangle( 'position', [ encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 1), encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 2), 2*r, 2*r ],...
+									% 									 'FaceColor', 'k', 'LineStyle', 'none', 'Curvature', [1 1] );
+									h{iL,iEcc}(iCell) = fill( r*cosd(0:60:300)+encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 1), r*sind(0:60:300)+encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 2),...
+																	'k', 'FaceColor', 'k', 'FaceAlpha', 0.5, 'LineStyle', 'none' );
+								end
+								eyeIdx = time{1}(iTick) + trials(trialsIdx{1}(iTrial)).(conditions(iCond).alignEvent) + (-10:0);
+								if(iEcc == 1)
+									ecc = 0.75;
+								else
+									ecc = Eccs(iEcc);
+								end
+								hEye{iL,iEcc} = plot( -trials(trialsIdx{1}(iTrial)).x.position(eyeIdx)/60 + ecc, -trials(trialsIdx{1}(iTrial)).y.position(eyeIdx)/60, 'w-', 'linewidth', 1 );
+							end
+						end
+						drawnow;
+					end
+
+					% update graphic objects for each time point
+					for( iEcc = 1 : size(Eccs,2) )
+			            iCond = [conditions.contrast] == contrasts(iCont) & [conditions.eccentricity] == Eccs(iEcc) & [conditions.sf] == SFs(iCont);
+						
+						for( iL = 1 : 4 )
+							subplot(nEccs, 4, (iEcc-1)*4 + iL);
+							title(sprintf('%s | Ecc=%d | t=%dms', encoder.layers(iL).name, Eccs(iEcc), time{1}(iTick)), 'color', 'w');
+								
+							for( iCell = 1 : nCellsUsed{iL,iEcc} )
+								h{iL,iEcc}(iCell).FaceColor = colors{iL} * min( 1, max(0, LFR{iCond,iL}(iCell,iTick,iTrial)) / frMax );
+							end
+							eyeIdx = time{1}(iTick) + trials(trialsIdx{1}(iTrial)).(conditions(iCond).alignEvent) + (-10:0);
+							if(iEcc == 1)
+								ecc = 0.75;
+							else
+								ecc = Eccs(iEcc);
+							end
+							hEye{iL,iEcc}.XData = -trials(trialsIdx{1}(iTrial)).x.position(eyeIdx)/60 + ecc;
+							hEye{iL,iEcc}.YData = -trials(trialsIdx{1}(iTrial)).y.position(eyeIdx)/60;
+						end
+					end
+					drawnow;
+					writeVideo(writerObj, getframe(gcf));
+					% pause;
+				end
+
+				close(writerObj);
+			end
+		end
+		
 	end
 end

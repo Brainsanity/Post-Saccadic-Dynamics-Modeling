@@ -1,3 +1,372 @@
+%% display neurons
+% figure( 'NumberTitle', 'off', 'color', 'w');
+% SynIdx.POn = [cellIdx{1,1}(cell2AnalyzeIdx{1,1}); cellIdx{1,2}(cell2AnalyzeIdx{1,2}); cellIdx{1,3}(cell2AnalyzeIdx{1,3})];
+% SynIdx.POff = [cellIdx{2,1}(cell2AnalyzeIdx{2,1}); cellIdx{2,2}(cell2AnalyzeIdx{2,2}); cellIdx{2,3}(cell2AnalyzeIdx{2,3})];
+% SynIdx.MOn = [cellIdx{3,1}(cell2AnalyzeIdx{3,1}); cellIdx{3,2}(cell2AnalyzeIdx{3,2}); cellIdx{3,3}(cell2AnalyzeIdx{3,3})];
+% SynIdx.MOff = [cellIdx{4,1}(cell2AnalyzeIdx{4,1}); cellIdx{4,2}(cell2AnalyzeIdx{4,2}); cellIdx{4,3}(cell2AnalyzeIdx{4,3})];
+SynIdx.POn = [cellIdx{1,1}; cellIdx{1,2}; cellIdx{1,3}];
+SynIdx.POff = [cellIdx{2,1}; cellIdx{2,2}; cellIdx{2,3}];
+SynIdx.MOn = [cellIdx{3,1}; cellIdx{3,2}; cellIdx{3,3}];
+SynIdx.MOff = [cellIdx{4,1}; cellIdx{4,2}; cellIdx{4,3}];
+% encoder.SpatialModel.DisplaySynthesizedRFParams(encoder.layers(1).sRFParams(SynIdx.POn), encoder.layers(3).sRFParams(SynIdx.MOn));
+% encoder.SpatialModel.DisplaySynthesizedRFParams(encoder.layers(2).sRFParams(SynIdx.POff), encoder.layers(4).sRFParams(SynIdx.MOff));
+
+%%
+CS = {'Center', 'Surround'};
+ONOFF = {'On', 'Off'};
+PM = {'P', 'M'};
+for( iCS = 1 : 2 )
+	figure( 'NumberTitle', 'off', 'name', ['Predicted (Raw noIntercept) Radius VS Spacing Predicted by WatsonModel: ', CS{iCS}], 'color', 'w' );
+	lineWidth = 2;
+	fontSize = 20;
+	ecc = 0:0.01:40;
+	colors = { [1 0 0], [0 0 1], [1 0 1], [0 1 1], ...
+			  [0 1 0], 			[0 0 1], ...
+			  [0.5 1 0.5], 		[0.5 0.5 1], ...
+			  [0 0.5 0], 		[0 0 0.5], ...
+			  [0.25 0.75 0.25], [0.25 0.25 0.75] };
+	for( iPM = 2:-1:1 )
+        h = [];
+		subplot(1,2,iPM); hold on;
+		k = 1; 	  % temporal meridian
+		for( iOnOff = 1 : 2 )
+			cellType = [PM{iPM}, ONOFF{iOnOff}];
+
+			[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( [encoder.layers((iPM-1)*2+iOnOff).sRFParams(SynIdx.(cellType)).eccDegs], WatsonRGCModel.enumeratedMeridianNames{k}, cellType );
+			h(iOnOff) = plot( spacing, [encoder.layers((iPM-1)*2+iOnOff).sRFParams(SynIdx.(cellType)).([lower(CS{iCS}) 'Radii'])], '.', 'color', colors{iOnOff+2}, 'lineWidth', lineWidth, 'displayName', ['CK Synthesized VS WT ', ONOFF{iOnOff}] );
+
+			[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs, WatsonRGCModel.enumeratedMeridianNames{k}, cellType );
+			h(2+iOnOff) = plot( spacing, encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs, 'o', 'color', colors{iOnOff}, 'lineWidth', lineWidth, 'displayName', ['CK Digitized VS WT ', ONOFF{iOnOff}] );
+			
+			% coef.([cellType CS{iCS}]) = polyfit( log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs), 1 );
+			% [r_, p_] = corrcoef( log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs ./ spacing) );
+			coef.([cellType CS{iCS}]) = polyfit( (spacing), (encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs), 1 );
+			[r_, p_] = corrcoef( (spacing), (encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs) );
+			r.([cellType CS{iCS}]) = r_(2);
+			pVal.([cellType CS{iCS}]) = p_(2);
+			% minEcc = max(1, min(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs));
+			minEcc = 0;max(1, spacing);
+			fun.([cellType CS{iCS}]) = @(x) (x < minEcc) .* interp1(minEcc:0.01:40, (polyval(coef.([cellType CS{iCS}]), (minEcc:0.01:40))), x, 'linear', 'extrap') + ...
+											(x >= minEcc) .* (polyval(coef.([cellType CS{iCS}]), (x)));
+			
+			[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( ecc, WatsonRGCModel.enumeratedMeridianNames{k}, cellType );
+			h(4+iOnOff) = plot( spacing, fun.([cellType CS{iCS}])(spacing), '--', 'color', colors{iOnOff}, 'lineWidth', 2, 'displayName', ['Fit Radius ~ Spacing: ', ONOFF{iOnOff}] );
+
+			h(6+iOnOff) = plot( spacing, encoder.SpatialModel.([PM{iPM} CS{iCS} 'RadiusFunction'])( encoder.SpatialModel.([PM{iPM} CS{iCS} 'RadiusParams']), ecc ), '-', 'color', colors{iOnOff}, 'lineWidth', lineWidth, 'displayName', ['CK Model VS WT ', ONOFF{iOnOff}] );
+		end
+		[~, spacingOn] = WatsonRGCModel.RFSpacingDensityMeridian( encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs, WatsonRGCModel.enumeratedMeridianNames{k}, [PM{iPM} 'On'] );
+		[~, spacingOff] = WatsonRGCModel.RFSpacingDensityMeridian( encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs, WatsonRGCModel.enumeratedMeridianNames{k}, [PM{iPM} 'Off'] );
+		spacing = mean([spacingOn, spacingOff], 2);
+		coef.([PM{iPM} CS{iCS}]) = polyfit( log(spacing), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs), 1 );
+		[r_, p_] = corrcoef( log(spacing), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs) );
+		r.([PM{iPM} CS{iCS}]) = r_(2);
+		pVal.([PM{iPM} CS{iCS}]) = p_(2);
+		% minEcc = max(1, min(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs));
+		minEcc = 0;max(1, spacing);
+		fun.([PM{iPM} CS{iCS}]) = @(x) (x < minEcc) .* interp1(minEcc:0.01:40, exp(polyval(coef.([PM{iPM} CS{iCS}]), (minEcc:0.01:40))), x, 'linear', 'extrap') + ...
+										(x >= minEcc) .* exp(polyval(coef.([PM{iPM} CS{iCS}]), log(x)));
+		h(end+1) = plot( spacing, encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs, 'k^', 'lineWidth', lineWidth, 'displayName', 'Mean Spacing VS Radius' );
+		h(end+1) = plot( spacing, fun.([PM{iPM} CS{iCS}])(spacing), '--', 'color', 'k', 'lineWidth', 2, 'displayName', 'Fit Radius ~ Spacing' );
+		title( [PM{iPM} ' Cell @' WatsonRGCModel.enumeratedMeridianNames{k}] );
+		xlabel('Spacing (deg)');
+		set( gca, 'children', h(end:-1:1), 'lineWidth', lineWidth, 'fontSize', fontSize );
+	end
+	ylabel('Radius VS Spacing');
+	legend( h, 'location', 'northEast' );
+end
+
+%%
+
+
+%%
+obj = encoder;
+% encoder2 = Encoder([], true);
+% encoder2.DisplayExampleCells(LFR, time, conditions, 'saccadeOff', trials, trialsIdx, cellIdx);
+iL = 1; plot( [obj.layers(iL).sRFParams.temporalEccDegs], ([obj.layers(iL).sRFParams.surroundRadii] ./ [obj.layers(iL).sRFParams.centerRadii]).^2 .* ([obj.layers(iL).sRFParams.surroundPeakSensitivities] ./ [obj.layers(iL).sRFParams.centerPeakSensitivities]), '.' )
+%%
+subplot(2,2,1); hold on; cla;
+for(iL = [1 3])
+	plot( [encoder2.layers(iL).sRFParams.centerRadii].^2 .* [encoder2.layers(iL).sRFParams.centerPeakSensitivities], [encoder2.layers(iL).sRFParams.surroundRadii].^2 .* [encoder2.layers(iL).sRFParams.surroundPeakSensitivities], '.' )
+end
+plot( [min(get(gca,'xlim'), get(gca,'ylim')), max(get(gca,'xlim'), get(gca,'ylim'))], [min(get(gca,'xlim'), get(gca,'ylim')), max(get(gca,'xlim'), get(gca,'ylim'))], 'k-' );
+
+subplot(2,2,2); hold on; cla;
+for(iL = [1 3])
+	plot( [encoder2.layers(iL).sRFParams.eccDegs], [encoder2.layers(iL).sRFParams.surroundRadii] ./ [encoder2.layers(iL).sRFParams.centerRadii], '.' );
+end
+plot( [min(get(gca,'xlim'), get(gca,'ylim')), max(get(gca,'xlim'), get(gca,'ylim'))], [min(get(gca,'xlim'), get(gca,'ylim')), max(get(gca,'xlim'), get(gca,'ylim'))], 'k-' );
+
+subplot(2,2,3); hold on; cla;
+for(iL = [1 3])
+	plot( [encoder2.layers(iL).sRFParams.centerPeakSensitivities], [encoder2.layers(iL).sRFParams.surroundPeakSensitivities], '.' );
+end
+plot( [min(get(gca,'xlim'), get(gca,'ylim')), max(get(gca,'xlim'), get(gca,'ylim'))], [min(get(gca,'xlim'), get(gca,'ylim')), max(get(gca,'xlim'), get(gca,'ylim'))], 'k-' );
+
+%%
+figure
+obj = encoder;
+for(iPM = 1 : 2)
+	subplot(2,2,iPM); hold on;
+	% rCenter = obj.SpatialModel.([PM{iPM} 'CenterRadiusFunction'])( obj.SpatialModel.([PM{iPM} 'CenterRadiusParams']), ecc);
+	% rSurround = obj.SpatialModel.([PM{iPM} 'SurroundRadiusFunction'])( obj.SpatialModel.([PM{iPM} 'SurroundRadiusParams']), ecc);
+	[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( ecc, WatsonRGCModel.enumeratedMeridianNames{k}, [PM{iPM}, 'On'] );
+	% rCenter = fun.(obj.layers(iPM*2-1).name).Center(spacing);
+	rCenter = fun.([obj.layers(iPM*2-1).name(1) 'Center'])(spacing);
+	if(iPM <= 1)
+		% rSurround = fun.(obj.layers(iPM*2-1).name).Surround(spacing);
+		rCenter = fun.([obj.layers(iPM*2-1).name(1) 'Surround'])(spacing);
+	else
+		% rSurround = fun.(obj.layers(iPM*2-3).name).Surround(spacing) ./ fun.(obj.layers(iPM*2-3).name).Center(spacing) .* fun.(obj.layers(iPM*2-1).name).Center(spacing);
+		rSurround = fun.([obj.layers(iPM*2-3).name(1), 'Surround'])(spacing) ./ fun.([obj.layers(iPM*2-3).name(1), 'Center'])(spacing) .* fun.([obj.layers(iPM*2-1).name(1), 'Center'])(spacing);
+	end
+	plot( ecc, rCenter, 'r-' );
+	plot( ecc, rSurround, 'b-' );
+    plot( ecc, (rSurround./rCenter).^2, 'g.' )
+    plot( ecc, obj.SpatialModel.([PM{iPM} 'CenterPeakSensitivityFunction'])( obj.SpatialModel.([PM{iPM} 'CenterPeakSensitivityParams']), rCenter)./ ...
+    		   obj.SpatialModel.([PM{iPM} 'SurroundPeakSensitivityFunction'])( obj.SpatialModel.([PM{iPM} 'SurroundPeakSensitivityParams']), rSurround), 'c.' );
+	plot( obj.SpatialModel.([PM{iPM} 'CenterData'])('size').eccDegs, obj.SpatialModel.([PM{iPM} 'CenterData'])('size').radiusDegs, 'ro' );
+	plot( obj.SpatialModel.([PM{iPM} 'SurroundData'])('size').eccDegs, obj.SpatialModel.([PM{iPM} 'SurroundData'])('size').radiusDegs, 'bo' );
+
+	subplot(2,2,2+iPM); hold on;
+	plot( rCenter, obj.SpatialModel.([PM{iPM} 'CenterPeakSensitivityFunction'])( obj.SpatialModel.([PM{iPM} 'CenterPeakSensitivityParams']), rCenter), 'r-' );
+	plot( rSurround, obj.SpatialModel.([PM{iPM} 'SurroundPeakSensitivityFunction'])( obj.SpatialModel.([PM{iPM} 'SurroundPeakSensitivityParams']), rSurround), 'b-' );
+	plot( obj.SpatialModel.([PM{iPM} 'CenterData'])('sensitivity').radiusDegs, obj.SpatialModel.([PM{iPM} 'CenterData'])('sensitivity').peakSensitivity, 'ro' );
+	plot( obj.SpatialModel.([PM{iPM} 'SurroundData'])('sensitivity').radiusDegs, obj.SpatialModel.([PM{iPM} 'SurroundData'])('sensitivity').peakSensitivity, 'bo' );
+end
+
+%%
+for(iL = 1 : 4)
+	[~, spacing] = WatsonRGCModel.RFSpacingDensity(encoder.layers(iL).locations, encoder.layers(iL).name);
+	% cR = num2cell(fun.(encoder.layers(iL).name).Center(spacing));
+	cR = num2cell(fun.([encoder.layers(iL).name(1) 'Center'])(spacing));
+	if(iL <= 2)
+		% sR = num2cell(fun.(encoder.layers(iL).name).Surround(spacing));
+		sR = num2cell(fun.([encoder.layers(iL).name(1) 'Surround'])(spacing));
+	else
+		% sR = num2cell(fun.(encoder.layers(iL-2).name).Surround(spacing) ./ fun.(encoder.layers(iL-2).name).Center(spacing) .* fun.(encoder.layers(iL).name).Center(spacing));
+		sR = num2cell(fun.([encoder.layers(iL-2).name(1) 'Surround'])(spacing) ./ fun.([encoder.layers(iL-2).name(1) 'Center'])(spacing) .* fun.([encoder.layers(iL).name(1) 'Center'])(spacing));
+	end
+% 	cR = num2cell(encoder.SpatialModel.([encoder.layers(iL).name(1) 'CenterRadiusFunction'])( encoder.SpatialModel.([encoder.layers(iL).name(1) 'CenterRadiusParams']), [encoder.layers(iL).sRFParams.eccDegs]));
+% 	sR = num2cell(encoder.SpatialModel.([encoder.layers(iL).name(1) 'SurroundRadiusFunction'])( encoder.SpatialModel.([encoder.layers(iL).name(1) 'SurroundRadiusParams']), [encoder.layers(iL).sRFParams.eccDegs]));
+	
+	if(iL <= 4)
+		cPS = num2cell(encoder.SpatialModel.([encoder.layers(iL).name(1) 'CenterPeakSensitivityFunction'])(encoder.SpatialModel.([encoder.layers(iL).name(1) 'CenterPeakSensitivityParams']), [cR{:}]));
+		sPS = num2cell(encoder.SpatialModel.([encoder.layers(iL).name(1) 'SurroundPeakSensitivityFunction'])(encoder.SpatialModel.([encoder.layers(iL).name(1) 'SurroundPeakSensitivityParams']), [sR{:}]));
+	else
+		cPS = num2cell(encoder.SpatialModel.([encoder.layers(iL).name(1) 'CenterPeakSensitivityFunction'])([2.4036, -1.8920], [cR{:}]));
+		sPS = num2cell(encoder.SpatialModel.([encoder.layers(iL).name(1) 'SurroundPeakSensitivityFunction'])([2.4036, -1.8920], [sR{:}]));
+	end
+	
+	[encoder.layers(iL).sRFParams.centerRadii] = cR{:};
+	[encoder.layers(iL).sRFParams.surroundRadii] = sR{:};
+	[encoder.layers(iL).sRFParams.centerPeakSensitivities] = cPS{:};
+	[encoder.layers(iL).sRFParams.surroundPeakSensitivities] = sPS{:};
+end
+encoder.DisplayExampleCells(LFR, time, conditions, 'saccadeOff', trials, trialsIdx, cellIdx);
+
+return;
+
+
+
+%% run multiple classifiers
+folder = '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1';
+
+classifiers = { 'thresholding-uni', ...
+				'thresholding-sw_uni-tw_dprime', ...
+				'thresholding-sw_sine-tw_uni' };
+for(k = 1 : size(classifiers,2)-1)
+    fprintf('Processing: %s ...\n', classifiers{k});
+    if( exist( fullfile(folder, classifiers{k}, 'PerformanceData.mat') ) )
+		delete( fullfile(folder, classifiers{k}, 'PerformanceData.mat') );
+	end
+	[tTicks, accTPRm, accTPRsd, Thresholds, ThresholdsSTD] = encoder.ContrastDetection(classifiers{k}, 0.625, 0.1, folder, fullfile(folder, classifiers{k}));
+end
+
+return;
+
+
+%%
+% Eccs = unique([conditions.eccentricity]);
+% nEccs = size(Eccs,2);
+% SFs = [0, 2, 10];
+% contrasts = [0, 0.5, 0.5];
+% colors = { [1 0 0], [0 0 1], [1 0 1], [0 1 1] };
+
+iTrial = 7;
+
+for( iCont = 1 : size(contrasts,2) )
+	figure( 'NumberTitle', 'off', 'color', 'w', 'name', sprintf('Spatial Dynamics: Contrast=%0.2f, SF=%d', contrasts(iCont), SFs(iCont)) );
+	pause(0.1);
+	jf = get(handle(gcf),'javaframe');
+	jf.setMaximized(1);
+	pause(0.5);
+
+	for( iEcc = 1 : size(Eccs,2) )
+		for( iL = 1 : 4 )
+			subplot(nEccs, 4, (iEcc-1)*4 + iL); hold on;
+			set( gca, 'fontsize', 20, 'linewidth', 2 );
+
+			iCond = find( [conditions.contrast] == contrasts(iCont) & [conditions.eccentricity] == Eccs(iEcc) & [conditions.sf] == SFs(iCont) );
+
+			tStart = 0;
+
+			for( iTick = find(time{1} == tStart) : size(time{1},2)-400 )
+				eyeIdx = time{1}(iTick) + trials(trialsIdx{1}(iTrial)).(conditions(iCond).alignEvent);
+				plot( encoder.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}), 1) + trials(trialsIdx{1}(iTrial)).x.position(eyeIdx)/60, max(0, LFR{iCond,iL}(:,iTick,iTrial)), '.', 'color', colors{iL} );
+            end
+            drawnow;
+		end
+	end
+
+end
+
+return;
+
+
+
+%% Video4ExampleCells
+% Eccs = unique([conditions.eccentricity]);
+% nEccs = size(Eccs,2);
+% SFs = [0, 2, 10];
+% contrasts = [0, 0.5, 0.5];
+% colors = { [1 0 0], [0 0 1], [1 0 1], [0 1 1] };
+
+% iTrial = 1;
+% fr = reshape( cat( 1, LFR{ [conditions.contrast] == contrasts(1) | [conditions.contrast] == contrasts(2), : } ), 1, [] );
+% fr(fr<0) = 0;
+% fr(isnan(fr)) = [];
+frMax = std(fr)*5;
+
+%% get average radii
+for(iL = 4:-1:1)
+	for(iEcc = size(Eccs,2) : -1 : 1)
+		Radii(iL,iEcc) = mean( [encoder.layers(iL).sRFParams(cellIdx{iL,iEcc}).centerRadii] ) / 2;
+	end
+end
+
+%%
+for( iCont = 1 : size(contrasts,2) )
+
+	filename = sprintf('../../Data/videos/contrast=%.2f, SF=%d', contrasts(iCont), SFs(iCont));
+	writerObj = VideoWriter(filename, 'MPEG-4');
+	open(writerObj);
+
+	figure( 'NumberTitle', 'off', 'color', 'k', 'name', sprintf('Movie: Contrast=%0.2f, SF=%d', contrasts(iCont), SFs(iCont)) );
+	pause(0.1);
+	jf = get(handle(gcf),'javaframe');
+	jf.setMaximized(1);
+	pause(0.5);
+	for( iEcc = 1 : size(Eccs,2) )
+		for( iL = 1 : 4 )
+			subplot(nEccs, 4, (iEcc-1)*4 + iL); hold on;
+			set( gca, 'fontsize', 20, 'linewidth', 2, 'color', 'k', 'XColor', 'w', 'YColor', 'w' );
+			axis equal;
+		end
+	end
+
+	tStart = -50;
+	for( iTick = find(time{1} == tStart) : size(time{1},2) )
+
+		% create graphic objects
+		if( iTick == find(time{1} == tStart) )
+			for( iEcc = 1 : size(Eccs,2) )
+				for( iL = 1 : 4 )
+					subplot(nEccs, 4, (iEcc-1)*4 + iL);
+					title(sprintf('%s | Ecc=%d | t=%dms', encoder.layers(iL).name, Eccs(iEcc), time{1}(iTick)), 'color', 'w');
+					for( iCell = 1 : nCellsUsed{iL,iEcc} )
+						r = Radii(iL,iEcc);
+						iCond = find( [conditions.contrast] == contrasts(iCont) & [conditions.eccentricity] == Eccs(iEcc) & [conditions.sf] == SFs(iCont) );
+						% h{iTick,iL,iEcc}(iCell) = rectangle( 'position', [ encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 1), encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 2), 2*r, 2*r ],...
+						% 									 'FaceColor', 'k', 'LineStyle', 'none', 'Curvature', [1 1] );
+						h{iL,iEcc}(iCell) = fill( r*cosd(0:60:300)+encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 1), r*sind(0:60:300)+encoder.layers(iL).locations(cellIdx{iL,iEcc}(iCell), 2),...
+														'k', 'FaceColor', 'k', 'FaceAlpha', 0.5, 'LineStyle', 'none' );
+					end
+					eyeIdx = time{1}(iTick) + trials(trialsIdx{1}(iTrial)).(conditions(iCond).alignEvent) + (-10:0);
+					if(iEcc == 1)
+						ecc = 0.75;
+					else
+						ecc = Eccs(iEcc);
+					end
+					hEye{iL,iEcc} = plot( -trials(trialsIdx{1}(iTrial)).x.position(eyeIdx)/60 + ecc, -trials(trialsIdx{1}(iTrial)).y.position(eyeIdx)/60, 'w-', 'linewidth', 1 );
+				end
+			end
+			drawnow;
+		end
+
+		% update graphic objects for each time point
+		for( iEcc = 1 : size(Eccs,2) )
+            iCond = find( [conditions.contrast] == contrasts(iCont) & [conditions.eccentricity] == Eccs(iEcc) & [conditions.sf] == SFs(iCont) );
+			
+			for( iL = 1 : 4 )
+				subplot(nEccs, 4, (iEcc-1)*4 + iL);
+				title(sprintf('%s | Ecc=%d | t=%dms', encoder.layers(iL).name, Eccs(iEcc), time{1}(iTick)), 'color', 'w');
+					
+				for( iCell = 1 : nCellsUsed{iL,iEcc} )
+					h{iL,iEcc}(iCell).FaceColor = colors{iL} * min( 1, max(0, LFR{iCond,iL}(iCell,iTick,iTrial)) / frMax );
+				end
+				eyeIdx = time{1}(iTick) + trials(trialsIdx{1}(iTrial)).(conditions(iCond).alignEvent) + (-10:0);
+				if(iEcc == 1)
+					ecc = 0.75;
+				else
+					ecc = Eccs(iEcc);
+				end
+				hEye{iL,iEcc}.XData = -trials(trialsIdx{1}(iTrial)).x.position(eyeIdx)/60 + ecc;
+				hEye{iL,iEcc}.YData = -trials(trialsIdx{1}(iTrial)).y.position(eyeIdx)/60;
+			end
+		end
+		drawnow;
+		writeVideo(writerObj, getframe(gcf));
+		% pause;
+	end
+
+	close(writerObj);
+end
+
+return
+
+%%
+% eccs = [0, 4, 8, 12];
+% for( iL = size(encoder.layers,2) : -1 : 1 )
+%     index = encoder.layers(iL).locations(:,1) >= 0 & abs( encoder.layers(iL).locations(:,2) ) > 0.5;		% right visual field and vertically outside +-0.5 deg
+%     for( iEcc = size(eccs,2) : -1 : 1 )
+%         d2 = sum( encoder.layers(iL).locations.^2, 2 );
+%         if( eccs(iEcc) == 0 )
+%             idx = find( d2 <= trials(1).gratingWidth^2 & index );
+%         else
+%             w = trials(1).gratingWidth/2;
+%             idx = find( (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2 & index );
+%         end
+%         [a,r] = cart2pol(encoder.layers(iL).locations(idx,1), encoder.layers(iL).locations(idx,2));
+%         aMax = min(a(a>0));
+%         aMin = max(a(a<0));
+%         [a,r] = cart2pol(encoder.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),1), encoder.layers(iL).locations(cellIdx{iL,iEcc}(1:nCellsUsed{iL,iEcc}),2));
+%         cell2AnalyzeIdx{iL,iEcc} = find( aMin < a & a < aMax );
+%         nCells2Analyze(iL,iEcc) = size(cell2AnalyzeIdx{iL,iEcc}, 1);
+%     end
+% end
+% save('F:\Post Saccadic Dynamics Modeling\Data\figures\Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1\LFR.mat', '-v7.3', 'cellIdx', 'cell2AnalyzeIdx', 'conditions', 'LFR', 'nCells', 'nCellsUsed', 'nCells2Analyze', 'time', 'trials', 'trialsIdx');
+%%
+[tTicks, accTPRm, accTPRsd, Thresholds, ThresholdsSTD] = encoder.ContrastDetection('thresholding-uni', 0.625, 0.1, '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1', '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1/thresholding-uni');
+[tTicks, accTPRm, accTPRsd, Thresholds, ThresholdsSTD] = encoder.ContrastDetection('thresholding-sw_sine-tw_uni', 0.625, 0.1, '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1', '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1/thresholding-sw_sine-tw_uni');
+[tTicks, accTPRm, accTPRsd, Thresholds, ThresholdsSTD] = encoder.ContrastDetection('thresholding-sw_uni-tw_pval', 0.625, 0.1, '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1', '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1/thresholding-sw_uni-tw_pval');
+[tTicks, accTPRm, accTPRsd, Thresholds, ThresholdsSTD] = encoder.ContrastDetection('idealobserver', 0.75, 0.5, '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1', '../../Data/figures/Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1/idealobserver');
+return;
+
+%%
+for k = 1 : 10
+    data = load( sprintf( '../../Data/figures/Real ratio cells, avContrast=0.5, contrast=%.2f, same 30 trials; Hs=1/Real ratio cells, avContrast=0.5, contrast=%.2f, same 30 trials; Hs=1.mat', contrasts(k), contrasts(k) ) );
+    for m = 1 : size(data.conditions,2)
+        if(~data.conditions(m).present), continue; end
+        iCond = [conditions.contrast] == contrasts(k) & [conditions.eccentricity] == data.conditions(m).eccentricity & [conditions.sf] == data.conditions(m).sf;
+        LFR{iCond,1} = cat(3, [nan(size(data.LFR{m,1},1),20,30), single(data.LFR{m,1})], LFR{iCond,1});
+        LFR{iCond,2} = cat(3, [nan(size(data.LFR{m,2},1),20,30), single(data.LFR{m,2})], LFR{iCond,2});
+        LFR{iCond,3} = cat(3, [nan(size(data.LFR{m,3},1),20,30), single(data.LFR{m,3})], LFR{iCond,3});
+        LFR{iCond,4} = cat(3, [nan(size(data.LFR{m,4},1),20,30), single(data.LFR{m,4})], LFR{iCond,4});
+    end
+end
+% save('F:\Post Saccadic Dynamics Modeling\Data\figures\Real ratio cells, avContrast=0.5, 10contrasts, same 100 trials; Hs=1\LFR.mat', '-v7.3', 'cellIdx', 'cell2AnalyzeIdx', 'conditions', 'LFR', 'nCells', 'nCellsUsed', 'nCells2Analyze', 'time', 'trials', 'trialsIdx' );
+return;
+
 %%
 absent = max(0,cat(1,LFR{1,:}));
 present2 = max(0,cat(1,LFR{4,:}));

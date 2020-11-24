@@ -278,6 +278,34 @@ classdef WatsonRGCModel
         [rfPositions, maxMovements, reTriangulationIterations, terminationReason, histogramDataHistory, histogramWidths] = CreateMosaic(radius, cellType, varargin);
 
 
+        %% Compute the average spacing at each node in a give mosaic
+        function spacing = AveSpacingInMosaic(rfPositions)
+            rfsNum = size(rfPositions,1);
+            spacing = zeros(rfsNum,1);
+
+            % Perform new Delaunay triangulation to obtain indices for all triangles
+            triangleIndices = delaunayn(rfPositions);
+            
+            % Create a list of the unique springs (each spring connecting 2 cells)
+            springs = [ triangleIndices(:, [1, 2]); ...
+                        triangleIndices(:, [1, 3]); ...
+                        triangleIndices(:, [2, 3]) ];
+            springs = unique(sort(springs, 2), 'rows');
+            
+            % Compute spring vectors and lengths
+            springVectors =  rfPositions(springs(:,1), :) - rfPositions(springs(:,2), :);
+            springLengths = sqrt(sum(springVectors.^2, 2));
+
+            % Compute average spacing at each node
+            for rfIndex = 1:rfsNum
+                if mod(rfIndex-1, 1000) == 0
+                    fprintf('%d/%d...\n', rfIndex, rfsNum);
+                end
+                spacing(rfIndex) = mean(springLengths((springs(:,1) == rfIndex) | (springs(:,2) == rfIndex)));
+            end
+        end
+
+
         %% Return spacing and density of RGC RF at requested eccentricities of the visual field (in degrees)
         function [density, spacing] = RFSpacingDensityMeridian(ecc, meridian, cellType)
             % Return spacing and density of RGC RF at requested positions of the visual field (in degrees)

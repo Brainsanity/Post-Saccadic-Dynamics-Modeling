@@ -1,9 +1,13 @@
-function DisplaySynthesizedRFParams(obj)
+function DisplaySynthesizedRFParams(obj, PCells, MCells)
 
     %%%% Fitting with raw digitized data with no intercept
     ecc = reshape( repmat(0.01:0.1:40, 1, 100), 1, [] );
-    PCells = obj.SynthesizeRFParams(ecc, 'POn');
-    MCells = obj.SynthesizeRFParams(ecc, 'MOn');
+    if( nargin() < 2 )
+        PCells = obj.SynthesizeRFParams(ecc, 'POn');
+    end
+    if( nargin() <3 )
+        MCells = obj.SynthesizeRFParams(ecc, 'MOn');
+    end
 
     hFigP = figure( 'NumberTitle', 'off', 'name', 'Synthesized P Cells', 'color', 'w' );
     hFigM = figure( 'NumberTitle', 'off', 'name', 'Synthesized M Cells', 'color', 'w' );
@@ -11,7 +15,7 @@ function DisplaySynthesizedRFParams(obj)
     markerSize = 8;
     fontSize = 20;
 
-    %% P Cell Fittins
+    %% P Cell Fittings
     figure(hFigP);
     subplot(2,2,1); hold on;
     h(2) = plot( [PCells.eccDegs], [PCells.centerRadii], 'r.', 'markerSize', 10, 'displayName', 'Synthesized' );
@@ -34,7 +38,7 @@ function DisplaySynthesizedRFParams(obj)
     plot( obj.PSurroundData('sensitivity').radiusDegs, obj.PSurroundData('sensitivity').peakSensitivity, 'ko', 'markerSize', markerSize, 'lineWidth', lineWidth );
     plot( 0.01:0.01:10, obj.PSurroundPeakSensitivityFunction( obj.PSurroundPeakSensitivityParams, 0.01:0.01:10 ), 'g--', 'lineWidth', lineWidth );
 
-    %% M Cell Fittins
+    %% M Cell Fittings
     figure(hFigM);
     subplot(2,2,1); hold on;
     h(2) = plot( [MCells.eccDegs], [MCells.centerRadii], 'r.', 'markerSize', 10, 'displayName', 'Fitted' );
