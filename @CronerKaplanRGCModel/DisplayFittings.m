@@ -42,7 +42,7 @@ function DisplayFittings()
 	set( gca, 'xlim', [0.01 10], 'ylim', [0.001 1000], 'xscale', 'log', 'yscale', 'log', 'fontSize', fontSize, 'lineWidth', lineWidth );
 
 
-	%%%% Fitting with paper formula; not application for M cells
+	%%%% Fitting with paper formula; not applicable for M cells
 	%% P Cell Fittings
 	figure(hFigP);
 	subplot(2,2,1); hold on;
@@ -64,7 +64,7 @@ function DisplayFittings()
 
 	%%%% Fitting with median values from the paper with no intercept
 	ck = CronerKaplanRGCModel( 'dataSetToFit', 'medians', 'fitIntercept', false );
-	%% P Cell Fittins
+	%% P Cell Fittings
 	figure(hFigP);
 	subplot(2,2,1); hold on;
 	plot( ck.PCenterData('size').eccDegs, ck.PCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -82,7 +82,7 @@ function DisplayFittings()
 	plot( ck.PSurroundData('sensitivity').radiusDegs, ck.PSurroundData('sensitivity').peakSensitivity, 'ko', 'markerSize', markerSize, 'lineWidth', lineWidth );
 	hLinesP{4}(end+1) = plot( 0.01:0.01:10, ck.PSurroundPeakSensitivityFunction( ck.PSurroundPeakSensitivityParams, 0.01:0.01:10 ), '--', 'color', colors{2}, 'lineWidth', lineWidth, 'displayName', 'Medians noIntercept' );
 
-	%% M Cell Fittins
+	%% M Cell Fittings
 	figure(hFigM);
 	subplot(2,2,1); hold on;
 	plot( ck.MCenterData('size').eccDegs, ck.MCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -103,7 +103,7 @@ function DisplayFittings()
 
 	%%%% Fitting with median values from the paper with intercept
 	ck = CronerKaplanRGCModel( 'dataSetToFit', 'medians', 'fitIntercept', true );
-	%% P Cell Fittins
+	%% P Cell Fittings
 	figure(hFigP);
 	subplot(2,2,1); hold on;
 	plot( ck.PCenterData('size').eccDegs, ck.PCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -121,7 +121,7 @@ function DisplayFittings()
 	plot( ck.PSurroundData('sensitivity').radiusDegs, ck.PSurroundData('sensitivity').peakSensitivity, 'ko', 'markerSize', markerSize, 'lineWidth', lineWidth );
 	hLinesP{4}(end+1) = plot( 0.01:0.01:10, ck.PSurroundPeakSensitivityFunction( ck.PSurroundPeakSensitivityParams, 0.01:0.01:10 ), '--', 'color', colors{3}, 'lineWidth', lineWidth, 'displayName', 'Medians w/Intercept' );
 
-	%% M Cell Fittins
+	%% M Cell Fittings
 	figure(hFigM);
 	subplot(2,2,1); hold on;
 	plot( ck.MCenterData('size').eccDegs, ck.MCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -142,7 +142,7 @@ function DisplayFittings()
 
 	%%%% Fitting with raw digitized data with no intercept
 	ck = CronerKaplanRGCModel( 'dataSetToFit', 'raw', 'fitIntercept', false );
-	%% P Cell Fittins
+	%% P Cell Fittings
 	figure(hFigP);
 	subplot(2,2,1); hold on;
 	plot( ck.PCenterData('size').eccDegs, ck.PCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -160,7 +160,7 @@ function DisplayFittings()
 	plot( ck.PSurroundData('sensitivity').radiusDegs, ck.PSurroundData('sensitivity').peakSensitivity, 'ko', 'markerSize', markerSize, 'lineWidth', lineWidth );
 	hLinesP{4}(end+1) = plot( 0.01:0.01:10, ck.PSurroundPeakSensitivityFunction( ck.PSurroundPeakSensitivityParams, 0.01:0.01:10 ), '--', 'color', colors{4}, 'lineWidth', lineWidth, 'displayName', 'Raw noIntercept' );
 
-	%% M Cell Fittins
+	%% M Cell Fittings
 	figure(hFigM);
 	subplot(2,2,1); hold on;
 	plot( ck.MCenterData('size').eccDegs, ck.MCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -181,7 +181,7 @@ function DisplayFittings()
 
 	%%%% Fitting with raw digitized data with intercept
 	ck = CronerKaplanRGCModel( 'dataSetToFit', 'raw', 'fitIntercept', true );
-	%% P Cell Fittins
+	%% P Cell Fittings
 	figure(hFigP);
 	subplot(2,2,1); hold on;
 	plot( ck.PCenterData('size').eccDegs, ck.PCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );
@@ -199,7 +199,7 @@ function DisplayFittings()
 	plot( ck.PSurroundData('sensitivity').radiusDegs, ck.PSurroundData('sensitivity').peakSensitivity, 'ko', 'markerSize', markerSize, 'lineWidth', lineWidth );
 	hLinesP{4}(end+1) = plot( 0.01:0.01:10, ck.PSurroundPeakSensitivityFunction( ck.PSurroundPeakSensitivityParams, 0.01:0.01:10 ), '--', 'color', colors{5}, 'lineWidth', lineWidth, 'displayName', 'Raw w/Intercept' );
 
-	%% M Cell Fittins
+	%% M Cell Fittings
 	figure(hFigM);
 	subplot(2,2,1); hold on;
 	plot( ck.MCenterData('size').eccDegs, ck.MCenterData('size').radiusDegs, 'ko', 'lineWidth', lineWidth, 'markerSize', markerSize );

@@ -123,6 +123,8 @@ classdef CronerKaplanRGCModel < handle
 
         DisplayFittedCenterSurroundRadiusRatio(obj);
 
+        DisplaySpacing2RadiusFitting(obj);
+
         % Method to set synthesize parameters
         setSynthesizeParams(obj, varargin);
         

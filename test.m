@@ -12,70 +12,33 @@ SynIdx.MOff = [cellIdx{4,1}; cellIdx{4,2}; cellIdx{4,3}];
 % encoder.SpatialModel.DisplaySynthesizedRFParams(encoder.layers(2).sRFParams(SynIdx.POff), encoder.layers(4).sRFParams(SynIdx.MOff));
 
 %%
-CS = {'Center', 'Surround'};
-ONOFF = {'On', 'Off'};
-PM = {'P', 'M'};
-for( iCS = 1 : 2 )
-	figure( 'NumberTitle', 'off', 'name', ['Predicted (Raw noIntercept) Radius VS Spacing Predicted by WatsonModel: ', CS{iCS}], 'color', 'w' );
-	lineWidth = 2;
-	fontSize = 20;
-	ecc = 0:0.01:40;
-	colors = { [1 0 0], [0 0 1], [1 0 1], [0 1 1], ...
-			  [0 1 0], 			[0 0 1], ...
-			  [0.5 1 0.5], 		[0.5 0.5 1], ...
-			  [0 0.5 0], 		[0 0 0.5], ...
-			  [0.25 0.75 0.25], [0.25 0.25 0.75] };
-	for( iPM = 2:-1:1 )
-        h = [];
-		subplot(1,2,iPM); hold on;
-		k = 1; 	  % temporal meridian
-		for( iOnOff = 1 : 2 )
-			cellType = [PM{iPM}, ONOFF{iOnOff}];
+figure('color', 'w');
+					iL = 1;
+					t = encoder.activityParams.timeline;
+					for(iCond = 2:-1:1)
+						fr{iCond} = encoder.ExampleCellsActivitiesOnCondition(encoder.layers(iL).name, 0, (iCond-1)*2, 0.5, 'saccadeOff', t([1 end]));
+						for(iTrial = 1 : 4)
+							subplot(2,4,iTrial+(iCond-1)*4); hold on;
+							for(iCell = 1:50)
+								plot3( t, iCell*ones(size(encoder.activityParams.timeline)),  fr{iCond}(iCell, :, iTrial) );
+							end
+							set(gca, 'xlim', [-150 550], 'view', [14.7560 19.3337], 'fontsize', 20, 'linewidth', 2);
+							if(iTrial==4) ylabel('Neuron'); end
+							if(iTrial==1) xlabel('Time (ms)'); end
+							zlabel('Firing rate');
+						end
+					end
 
-			[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( [encoder.layers((iPM-1)*2+iOnOff).sRFParams(SynIdx.(cellType)).eccDegs], WatsonRGCModel.enumeratedMeridianNames{k}, cellType );
-			h(iOnOff) = plot( spacing, [encoder.layers((iPM-1)*2+iOnOff).sRFParams(SynIdx.(cellType)).([lower(CS{iCS}) 'Radii'])], '.', 'color', colors{iOnOff+2}, 'lineWidth', lineWidth, 'displayName', ['CK Synthesized VS WT ', ONOFF{iOnOff}] );
-
-			[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs, WatsonRGCModel.enumeratedMeridianNames{k}, cellType );
-			h(2+iOnOff) = plot( spacing, encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs, 'o', 'color', colors{iOnOff}, 'lineWidth', lineWidth, 'displayName', ['CK Digitized VS WT ', ONOFF{iOnOff}] );
-			
-			% coef.([cellType CS{iCS}]) = polyfit( log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs), 1 );
-			% [r_, p_] = corrcoef( log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs ./ spacing) );
-			coef.([cellType CS{iCS}]) = polyfit( (spacing), (encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs), 1 );
-			[r_, p_] = corrcoef( (spacing), (encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs) );
-			r.([cellType CS{iCS}]) = r_(2);
-			pVal.([cellType CS{iCS}]) = p_(2);
-			% minEcc = max(1, min(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs));
-			minEcc = 0;max(1, spacing);
-			fun.([cellType CS{iCS}]) = @(x) (x < minEcc) .* interp1(minEcc:0.01:40, (polyval(coef.([cellType CS{iCS}]), (minEcc:0.01:40))), x, 'linear', 'extrap') + ...
-											(x >= minEcc) .* (polyval(coef.([cellType CS{iCS}]), (x)));
-			
-			[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( ecc, WatsonRGCModel.enumeratedMeridianNames{k}, cellType );
-			h(4+iOnOff) = plot( spacing, fun.([cellType CS{iCS}])(spacing), '--', 'color', colors{iOnOff}, 'lineWidth', 2, 'displayName', ['Fit Radius ~ Spacing: ', ONOFF{iOnOff}] );
-
-			h(6+iOnOff) = plot( spacing, encoder.SpatialModel.([PM{iPM} CS{iCS} 'RadiusFunction'])( encoder.SpatialModel.([PM{iPM} CS{iCS} 'RadiusParams']), ecc ), '-', 'color', colors{iOnOff}, 'lineWidth', lineWidth, 'displayName', ['CK Model VS WT ', ONOFF{iOnOff}] );
-		end
-		[~, spacingOn] = WatsonRGCModel.RFSpacingDensityMeridian( encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs, WatsonRGCModel.enumeratedMeridianNames{k}, [PM{iPM} 'On'] );
-		[~, spacingOff] = WatsonRGCModel.RFSpacingDensityMeridian( encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs, WatsonRGCModel.enumeratedMeridianNames{k}, [PM{iPM} 'Off'] );
-		spacing = mean([spacingOn, spacingOff], 2);
-		coef.([PM{iPM} CS{iCS}]) = polyfit( log(spacing), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs), 1 );
-		[r_, p_] = corrcoef( log(spacing), log(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs) );
-		r.([PM{iPM} CS{iCS}]) = r_(2);
-		pVal.([PM{iPM} CS{iCS}]) = p_(2);
-		% minEcc = max(1, min(encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').eccDegs));
-		minEcc = 0;max(1, spacing);
-		fun.([PM{iPM} CS{iCS}]) = @(x) (x < minEcc) .* interp1(minEcc:0.01:40, exp(polyval(coef.([PM{iPM} CS{iCS}]), (minEcc:0.01:40))), x, 'linear', 'extrap') + ...
-										(x >= minEcc) .* exp(polyval(coef.([PM{iPM} CS{iCS}]), log(x)));
-		h(end+1) = plot( spacing, encoder.SpatialModel.([PM{iPM} CS{iCS} 'Data'])('size').radiusDegs, 'k^', 'lineWidth', lineWidth, 'displayName', 'Mean Spacing VS Radius' );
-		h(end+1) = plot( spacing, fun.([PM{iPM} CS{iCS}])(spacing), '--', 'color', 'k', 'lineWidth', 2, 'displayName', 'Fit Radius ~ Spacing' );
-		title( [PM{iPM} ' Cell @' WatsonRGCModel.enumeratedMeridianNames{k}] );
-		xlabel('Spacing (deg)');
-		set( gca, 'children', h(end:-1:1), 'lineWidth', lineWidth, 'fontSize', fontSize );
-	end
-	ylabel('Radius VS Spacing');
-	legend( h, 'location', 'northEast' );
-end
-
-%%
+					figure('color', 'w'); hold on;
+					[data, r] = hist( squeeze(sum(mean(fr{1}(:, 0<=t & t<=500, :), 1), 2)), 50 );
+					thresh = prctile( squeeze(sum(mean(fr{1}(:, 0<=t & t<=500, :), 1), 2)), 90 );
+					plot(r, data / sum(data) / (r(2)-r(1)), 'b-', 'lineWidth', 2);
+					
+					[data, r] = hist( squeeze(sum(mean(fr{2}(:, 0<=t & t<=500, :), 1), 2)), 50 );
+					plot(r, data / sum(data) / (r(2)-r(1)), 'r-', 'lineWidth', 2);
+					plot([1 1]*thresh, get(gca, 'ylim'), 'k-', 'lineWidth', 2);
+					xlabel('Accumulate population mean FR (spikes/s)');ylabel('Probability density');
+					set(gca, 'fontsize', 20, 'lineWidth', 2);
 
 
 %%
@@ -109,7 +72,7 @@ for(iPM = 1 : 2)
 	subplot(2,2,iPM); hold on;
 	% rCenter = obj.SpatialModel.([PM{iPM} 'CenterRadiusFunction'])( obj.SpatialModel.([PM{iPM} 'CenterRadiusParams']), ecc);
 	% rSurround = obj.SpatialModel.([PM{iPM} 'SurroundRadiusFunction'])( obj.SpatialModel.([PM{iPM} 'SurroundRadiusParams']), ecc);
-	[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( ecc, WatsonRGCModel.enumeratedMeridianNames{k}, [PM{iPM}, 'On'] );
+	[~, spacing] = WatsonRGCModel.RFSpacingDensityMeridian( ecc, WatsonRGCModel.enumeratedMeridianNames{iMeridian}, [PM{iPM}, 'On'] );
 	% rCenter = fun.(obj.layers(iPM*2-1).name).Center(spacing);
 	rCenter = fun.([obj.layers(iPM*2-1).name(1) 'Center'])(spacing);
 	if(iPM <= 1)

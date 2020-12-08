@@ -56,7 +56,79 @@ classdef EmpiricalBox < handle
 			data = cellfun( @(sbj) struct( 'sbj', sbj(1:end-4), 'trials', EmpiricalBox.LoadSingleData(fullfile(dataFolder, sbj)) ), subjects );
 		end
 
-		function [nFalsePositive, nNoPresent] = StimDur2FA(dataFolder)
+		function [tpr, fpr, nPresent, nNoPresent] = SinglePerformance(dataFolder, sbj)
+			if(~exist('dataFolder', 'var') || isempty(dataFolder))
+				dataFolder = '../../Data/Data';
+			end
+
+			dataFile = fullfile(dataFolder, [sbj, '.mat']);
+
+			durs = [0 100 250 650];
+			% SFs = [2 10];
+			eccs = [0 4 8 12];
+
+			trials = EmpiricalBox.LoadSingleData(dataFile);
+			for( iDur = size(durs,2)-1 : -1 : 1 )
+				durations = [trials.stimOff] - [trials.saccOff];
+				idxDur = durs(iDur) < durations & durations < durs(iDur+1);
+
+				for( iEcc = size(eccs,2) : -1 : 1 )
+					idxEcc = [trials.eccentricity] == eccs(iEcc);
+
+					idxNoPresent = idxDur & idxEcc & ~[trials.present];
+					nNoPresent(iDur,iEcc) = sum(idxNoPresent);
+					fpr(iDur,iEcc) = sum( idxNoPresent & [trials.responseValue] ) / nNoPresent(iDur,iEcc);
+
+					idxPresent = idxDur & idxEcc & [trials.present];
+					nPresent(iDur,iEcc) = sum(idxPresent);
+					tpr(iDur,iEcc) = sum( idxPresent & [trials.responseValue] ) / nPresent(iDur,iEcc);
+				end
+			end
+		end
+
+		function [fpr, nNoPresent, durs, eccs] = FalsePositiveRate(sbj)
+			dataFolder = 'F:\Post Saccadic Dynamics Modeling\Data\Data';
+			dataFiles = dir( fullfile(dataFolder, '*.mat') );
+			subjects = {dataFiles.name};
+
+			durs = [0 100 250 650];
+			% SFs = [2 10];
+			eccs = [0 4 8 12];
+
+			if( exist( fullfile(dataFolder, 'FalsePositiveVSDuration.mat') ) )
+				load( fullfile(dataFolder, 'FalsePositiveVSDuration.mat') );
+			
+			else
+				for( iSbj = size(subjects,2) : -1 : 1 )
+					trials = EmpiricalBox.LoadSingleData( fullfile(dataFolder, subjects{iSbj}) );
+					
+					for( iDur = size(durs,2)-1 : -1 : 1 )
+						durations = [trials.stimOff] - [trials.saccOff];
+						idxDur = durs(iDur) < durations & durations < durs(iDur+1);
+
+						for( iEcc = size(eccs,2) : -1 : 1 )
+							idxEcc = [trials.eccentricity] == eccs(iEcc);
+
+							idxNoPresent = idxDur & idxEcc & ~[trials.present];
+							nNoPresent(iSbj,iDur,iEcc) = sum(idxNoPresent);
+							fpr(iSbj,iDur,iEcc) = sum( idxNoPresent & [trials.responseValue] ) / nNoPresent(iSbj,iDur,iEcc);
+						end
+					end
+				end
+				save( fullfile(dataFolder, 'FalsePositiveVSDuration.mat'), 'frp', 'nNoPresent' );
+			end
+
+			for(iSbj = 1 : size(subjects,2))
+				if(strcmpi(sbj, subjects{iSbj}(1:end-4)))
+					fpr = squeeze(fpr(iSbj,:,:));
+					nNoPresent = squeeze(nNoPresent(iSbj,:,:));
+				end
+			end
+
+			[eccs, durs] = meshgrid(eccs, [50 150 500]);
+		end
+
+		function [fpr, nNoPresent] = StimDur2FA(dataFolder)
 			%% analyze correlation between false alarm rate and stimulus duration
 			if( nargin() < 1 )
 				dataFolder = 'F:\Post Saccadic Dynamics Modeling\Data\Data';
@@ -84,8 +156,8 @@ classdef EmpiricalBox < handle
 							idxEcc = [trials.eccentricity] == eccs(iEcc);
 
 							idxNoPresent = idxDur & idxEcc & ~[trials.present];
-							nNoPresent(iSbj,iDur,iSF,iEcc) = sum(idxNoPresent);
-							nFalsePositive(iSbj,iDur,iEcc) = sum( idxNoPresent & [trials.responseValue] ) / nNoPresent(iSbj,iDur,iEcc);
+							nNoPresent(iSbj,iDur,iEcc) = sum(idxNoPresent);
+							fpr(iSbj,iDur,iEcc) = sum( idxNoPresent & [trials.responseValue] ) / nNoPresent(iSbj,iDur,iEcc);
 						end
 					end
 				end
@@ -93,7 +165,7 @@ classdef EmpiricalBox < handle
 
 			figure('NumberTitle', 'off', 'name', 'False Alarm Rate VS Stimulus Duration | Pooled Across Conditions', 'color', 'w'); hold on;
 			colors = { 'r', 'g', 'b', 'm', 'y', 'c', [0.5 0 0], [0 0.5 0], [0 0 0.5], [0.5 0 0.5], [0.5 0.5 0], [0 0.5 0.5], [1 0.5 0.5], [0.5 1 0.5], [0.5 0.5 1], [1 0.5 1], [1 1 0.5], [0.5 1 1] };
-			poolFA = nansum( nFalsePositive .* nNoPresent, 3 ) ./ nansum( nNoPresent, 3 );
+			poolFA = nansum( fpr .* nNoPresent, 3 ) ./ nansum( nNoPresent, 3 );
 			for( iSbj = 1 : size(poolFA,1) )
 				h(iSbj) = plot( [50 150 500], poolFA(iSbj,:), '^', 'color', colors{iSbj}, 'markersize', 8, 'linewidth', 2, 'displayname', subjects{iSbj}(1:end-4) );
 				plot( [50 150 500], poolFA(iSbj,:), '--', 'color', colors{iSbj}, 'linewidth', 1 );
@@ -116,13 +188,13 @@ classdef EmpiricalBox < handle
 			for( iEcc = 1 : size(eccs,2) )
 				subplot(nRows, nCols, iEcc); hold on;
 				for( iSbj = 1 : size(nNoPresent,1) )
-					h(iSbj) = plot( [50 150 500], nFalsePositive(iSbj,:,iEcc), '^', 'color', colors{iSbj}, 'markersize', 8, 'linewidth', 2, 'displayname', subjects{iSbj}(1:end-4) );
-					plot( [50 150 500], nFalsePositive(iSbj,:,iEcc), '--', 'color', colors{iSbj}, 'linewidth', 1 );
+					h(iSbj) = plot( [50 150 500], fpr(iSbj,:,iEcc), '^', 'color', colors{iSbj}, 'markersize', 8, 'linewidth', 2, 'displayname', subjects{iSbj}(1:end-4) );
+					plot( [50 150 500], fpr(iSbj,:,iEcc), '--', 'color', colors{iSbj}, 'linewidth', 1 );
 				end
-				fa = nFalsePositive(:,:,iEcc);
+				fa = fpr(:,:,iEcc);
 				fa( any(isnan(fa(:,1:2)), 2), : ) = [];
 				m = nanmean(fa,1);
-				sem = nanstd(fa,1) ./ sqrt( sum(~isnan(nFalsePositive(:,:,iEcc)), 1) );
+				sem = nanstd(fa,1) ./ sqrt( sum(~isnan(fpr(:,:,iEcc)), 1) );
 				h(end+1) = plot( [50 150 500] + 10, m, 'ks-', 'markersize', 12, 'linewidth', 2, 'displayname', 'Average' );
 				plot( reshape([50 150  500; 50 150 500; nan nan nan], 1, []) + 5, reshape([m+sem; m-sem; nan nan nan], 1, [] ), 'k-', 'linewidth', 2 );
 				if( iEcc == size(eccs,2) )
