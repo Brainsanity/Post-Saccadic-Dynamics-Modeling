@@ -215,14 +215,14 @@ classdef Encoder < handle
 			if( ~exist('stabilize', 'var') || isempty(stabilize) )
 				stabilize = 'normal';
 			end
-			if( exist('saveFolder', 'var') || isempty(saveFolder) )
+			if( ~exist('saveFolder', 'var') || isempty(saveFolder) )
 				saveFolder = sprintf( 'Example Cells LFR' ); %sprintf( 'Example Cells LFR; contrast = %f', contrast );
 			end
 			if( saveFolder(end) == '/' || saveFolder(end) == '\' )
 				saveFolder(end) = [];
 			end
-			if( ~exist(fullfile(dataFolder,'figures',saveFolder), 'dir') )
-				mkdir( fullfile(dataFolder,'figures',saveFolder) );
+			if( ~exist(fullfile(dataFolder,'Simulated Activities',saveFolder), 'dir') )
+				mkdir( fullfile(dataFolder,'Simulated Activities',saveFolder) );
 			end
 
 			trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'A014.mat'));
@@ -242,7 +242,7 @@ classdef Encoder < handle
 
 			Eccs = unique([conditions.eccentricity]);
 
-			for( iCond = idxConditions )	%size(conditions,2) : -1 : 1 )
+			for( iCond = sort(idxConditions, 'descend') )	%size(conditions,2) : -1 : 1 )
 				iEcc = find( conditions(iCond).eccentricity == Eccs );
 
 				trialsIdx{iCond} = find( abs( [trials.stimOff] - [trials.saccadeOff] - (conditions(iCond).duration - 100) ) < 50, nTrials, 'first' );
@@ -320,10 +320,10 @@ classdef Encoder < handle
 				end
 
 				lfr = LFR(iCond,:);
-				save( fullfile( dataFolder, 'figures', saveFolder, sprintf('%s-%02d.mat', saveFolder, iCond) ), 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
+				save( fullfile( dataFolder, 'Simulated Activities', saveFolder, sprintf('%s-%02d.mat', saveFolder, iCond) ), 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
 			end
             
-            save( fullfile( dataFolder, 'figures', saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
+            save( fullfile( dataFolder, 'Simulated Activities', saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
 		end
 
 
