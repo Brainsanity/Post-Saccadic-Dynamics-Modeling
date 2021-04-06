@@ -98,7 +98,7 @@ classdef SaccadeTool < handle
 						%% filter m/sacs with analysis, blinks, notracks and invalid
 						index = false( size( outData(iTrial).(fields{i}).start ) );
 						for k = 1 : size(index,2)
-							index(k) = ~isIncludedIn( outData(iTrial).(fields{i}).start(k), outData(iTrial).(fields{i}).duration(k), outData(iTrial).analysis );
+							% index(k) = ~isIncludedIn( outData(iTrial).(fields{i}).start(k), outData(iTrial).(fields{i}).duration(k), outData(iTrial).analysis );
 							for field = { 'blinks', 'notracks', 'invalid' }
 								if ~index(k)
 									index(k) = isIntersectedIn( outData(iTrial).(fields{i}).start(k), outData(iTrial).(fields{i}).duration(k), outData(iTrial).(field{1}) );

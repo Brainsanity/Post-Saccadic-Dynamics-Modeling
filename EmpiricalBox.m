@@ -6,14 +6,22 @@ classdef EmpiricalBox < handle
 	end
 
 	methods (Static)
-		function trials = LoadSingleData(dataFile)
+		function trials = LoadSingleData(dataFile, isDriftOnly)
 			%% load data for one single subject
+			if(~exist('isDriftOnly', 'var') || isempty(isDriftOnly))
+				isDriftOnly = true;
+			end
 
 			% load experiment data
 			load( dataFile, 'ppt', 'eminfo', 'counter' );
 			trials = [ppt{:}];
-			eminfo.SaccadeStart = eminfo.SaccadeStart( eminfo.DriftOnly' & [trials.contrast] <= 0.5 );
-			trials = trials( eminfo.DriftOnly' & [trials.contrast] <= 0.5 );
+			if(isDriftOnly)
+                eminfo.SaccadeStart = eminfo.SaccadeStart( eminfo.DriftOnly' & [trials.contrast] <= 0.5 );
+				trials = trials( eminfo.DriftOnly' & [trials.contrast] <= 0.5 );
+            else
+                eminfo.SaccadeStart = eminfo.SaccadeStart( [trials.contrast] <= 0.5 );
+				trials = trials([trials.contrast] <= 0.5);
+			end
 
 			% set flashOn to the middle of saccade
 			for( iTrial = 1 : size(trials,2) )
@@ -100,7 +108,7 @@ classdef EmpiricalBox < handle
 			
 			else
 				for( iSbj = size(subjects,2) : -1 : 1 )
-					trials = EmpiricalBox.LoadSingleData( fullfile(dataFolder, subjects{iSbj}) );
+					trials = EmpiricalBox.LoadSingleData( fullfile(dataFolder, subjects{iSbj}), false );
 					
 					for( iDur = size(durs,2)-1 : -1 : 1 )
 						durations = [trials.stimOff] - [trials.saccOff];
