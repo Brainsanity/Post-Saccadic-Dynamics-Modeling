@@ -16,11 +16,13 @@ classdef EmpiricalBox < handle
 			load( dataFile, 'ppt', 'eminfo', 'counter' );
 			trials = [ppt{:}];
 			if(isDriftOnly)
-                eminfo.SaccadeStart = eminfo.SaccadeStart( eminfo.DriftOnly' & [trials.contrast] <= 0.5 );
-				trials = trials( eminfo.DriftOnly' & [trials.contrast] <= 0.5 );
+				idx = (eminfo.DriftOnly') & [trials.contrast] <= 0.5;% & ~isnan(eminfo.SaccadeStart');
+                eminfo.SaccadeStart = eminfo.SaccadeStart(idx);
+				trials = trials(idx);
             else
-                eminfo.SaccadeStart = eminfo.SaccadeStart( [trials.contrast] <= 0.5 );
-				trials = trials([trials.contrast] <= 0.5);
+            	idx = [trials.contrast] <= 0.5;% & ~isnan(eminfo.SaccadeStart');
+                eminfo.SaccadeStart = eminfo.SaccadeStart(idx);
+				trials = trials(idx);
 			end
 
 			% set flashOn to the middle of saccade
@@ -30,11 +32,19 @@ classdef EmpiricalBox < handle
 			
 			% redo saccade detection
 			trials = SaccadeTool.GetSacs( trials, 'minmsa', 3 );
+            flags = false(size(trials));
 			for( iTrial = size(trials,2) : -1 : 1 )
+                if(isempty(trials(iTrial).saccades.start))
+                    flags(iTrial) = true;
+                    continue;
+                end
 				[~, saccadeIdx(iTrial)] = min(abs( trials(iTrial).saccades.start - trials(iTrial).flashOn /trials(iTrial).sRate*1000 ));
 				saccadeOn(iTrial) = trials(iTrial).saccades.start(saccadeIdx(iTrial));																		% in samples
 				saccadeOff(iTrial) = trials(iTrial).saccades.start(saccadeIdx(iTrial)) + trials(iTrial).saccades.duration(saccadeIdx(iTrial)) - 1;			% in samples
-			end
+            end
+            trials(flags) = [];
+            saccadeOn(flags) = [];
+            saccadeOff(flags) = [];
 			saccadeOn = num2cell(saccadeOn);
 			saccadeOff = num2cell(saccadeOff);
 			[trials.saccadeOn] = saccadeOn{:};
@@ -96,7 +106,7 @@ classdef EmpiricalBox < handle
 
 		function [fpr, nNoPresent, durs, eccs] = FalsePositiveRate(sbj)
 			dataFolder = 'F:\Post Saccadic Dynamics Modeling\Data\Data';
-			dataFiles = dir( fullfile(dataFolder, '*.mat') );
+			dataFiles = dir( fullfile(dataFolder, 'A*.mat') );
 			subjects = {dataFiles.name};
 
 			durs = [0 100 250 650];
@@ -123,7 +133,7 @@ classdef EmpiricalBox < handle
 						end
 					end
 				end
-				save( fullfile(dataFolder, 'FalsePositiveVSDuration.mat'), 'frp', 'nNoPresent' );
+				save( fullfile(dataFolder, 'FalsePositiveVSDuration.mat'), 'fpr', 'nNoPresent' );
 			end
 
 			for(iSbj = 1 : size(subjects,2))
@@ -142,7 +152,7 @@ classdef EmpiricalBox < handle
 				dataFolder = 'F:\Post Saccadic Dynamics Modeling\Data\Data';
 			end
 
-			dataFiles = dir( fullfile(dataFolder, '*.mat') );
+			dataFiles = dir( fullfile(dataFolder, 'A*.mat') );
 			subjects = {dataFiles.name};
 
 			durs = [0 100 250 650];

@@ -84,7 +84,10 @@ classdef Encoder < handle
 				obj.activityParams.conditions = conditions;
 				obj.activityParams.timeline = time{1};
 				obj.activityParams.trials = trials(trialsIdx{1});
-			end
+            end
+            
+            frBG = max(0, cat(1, LFR{[obj.activityParams.conditions.sf] == 0, :}));
+			obj.activityParams.internalNoise = mean(reshape(frBG(:, end-199:end, :), 1, [])) / 3;		% 1/3 of the external noise acitivity
 		end
 
 
@@ -193,7 +196,7 @@ classdef Encoder < handle
 			y  = trials(iTrial).y.position(index) / 60;
 
 			[noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(iTrial).backgroundImage), trials(iTrial).pixelAngle/60 );
-			grating = obj.GenerateGrating( trials(iTrial).eccentricity, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
+			grating = obj.GenerateGrating( trials(iTrial).spatialFreq, trials(iTrial).phase*pi, trials(iTrial).pixelAngle/60, trials(iTrial).eccentricity, trials(iTrial).gratingWidth );
 			noise = noise * trials(iTrial).backgroundContrast;
             
 			iL = 3;	% POn cell
@@ -244,13 +247,14 @@ classdef Encoder < handle
 		end
 
 
-		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, saveFolder)
+		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, stimulus, saveFolder)
 			%% Show example modeled cells at locations (0,0), (0,4), (0,8), (0,12)
 			%	idxConditions:		indices of conditions to run, by default run all 9 conditions
 			%   dataFolder:			folder containing experiment data and noise background
 			%	alignEvent:			'saccadeOn', 'saccadeOff', 'flashOn'
 			%   contrast:			contrast of grating
 			%   stabilize:			'normal' (no stabilization), 'drift' (only stabilize drift), or 'full' (full stabilization)
+			%	stimulus:			'annulus' (annulus grating) or 'uniform' (uniform grating across the visual field)
 
 			if( ~exist('idxConditions', 'var') || isempty(idxConditions) )
 				idxConditions = 1:9;
@@ -277,9 +281,6 @@ classdef Encoder < handle
 			trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'Data', [sbj '.mat']));
 			nTrials = 100;
 
-			[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells([-pi pi]*0.02, fullfile(dataFolder, 'Data'), false);
-
-
 			conditions = struct( ...
 							'eccentricity',	{  0,   0,    0,   4,   4,   4,   8,   8,   8 }, ...
 							'sf',			{  0,   2,   10,   0,   2,  10,   0,   2,  10 }, ...		% sf=0 means noise alone
@@ -290,6 +291,16 @@ classdef Encoder < handle
 			[conditions.alignEvent] = deal(alignEvent);
 
 			Eccs = unique([conditions.eccentricity]);
+
+			if(strcmpi(stimulus, 'annulus'))
+				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nan, [-pi pi]*0.02, dataFolder, Eccs, false);
+			elseif(strcmpi(stimulus, 'uniform'))
+				nCells = 500;
+				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nCells, nan, dataFolder, Eccs, false);
+			else
+				fprintf('Argument stimulus must be ''annulus'' or ''uniform''!\n');
+				return;
+			end
 
 			for( iCond = sort(idxConditions, 'descend') )	%size(conditions,2) : -1 : 1 )
 				iEcc = find( conditions(iCond).eccentricity == Eccs );
@@ -376,7 +387,13 @@ classdef Encoder < handle
 	                    stimulus = stimulus * 0.5;		% noise at a contrast of 0.5
 	                else
 	                	% full contrast grating
-						[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).eccentricity, trials(idx(k)).gratingWidth, conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60 );
+	                	if(strcmpi(stimulus, 'annulus'))	% annulus grating
+							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60, conditions(iCond).eccentricity, trials(idx(k)).gratingWidth );
+						elseif(strcmpi(stimulus, 'uniform'))	% uniform grating across the whole visual field
+							rndPhase = str2double(trials(mod(idx(k),end)+1).backgroundImage(find(trials(mod(idx(k),end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for phase
+							rndOri = str2double(trials(mod(idx(k)+1,end)+1).backgroundImage(find(trials(mod(idx(k)+1,end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for orientation
+							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, mod(rndPhase,100)/100*2*pi, trials(idx(k)).pixelAngle/60, -1, mod(rndOri,100)/100*360 );
+						end
 					end
                     
 					avContrast = 0.5;
@@ -413,14 +430,14 @@ classdef Encoder < handle
 		end
 
 
-		function GatherSimulatedExampleCellsActivities(obj, dataFolder, saveFolder)
+		function GatherSimulatedExampleCellsActivities(obj, dataFolder, sbj, saveFolder)
 			if( ~exist('dataFolder', 'var') || isempty(dataFolder) )
 				dataFolder = '../../Data/';
 			end
 
 			for(iCond = 9 : -1 : 1)
 				fprintf('Processing %s-%02d.mat ...\n', saveFolder, iCond);
-				data = load(fullfile( dataFolder, 'Simulated Activities', saveFolder, sprintf('%s-%02d.mat', saveFolder, iCond) ));
+				data = load(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', saveFolder, iCond) ));
 				if(iCond ~= data.iCond)
 					warning('iCond not consistent!!!\n');
 				end
@@ -436,55 +453,92 @@ classdef Encoder < handle
 			nAllCells = data.nAllCells;
 
 			fprintf('Saving %s.mat ...\n', saveFolder);
-			save( fullfile( dataFolder, 'Simulated Activities', saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
+			save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
 		end
 
 
-		function [idxExampleCells, idxAllCells, nExampleCells, nAllCells] = GetExampleCells(obj, angularRange, dataFolder, isPlot)
+		function [idxExampleCells, idxAllCells, nExampleCells, nAllCells] = GetExampleCells(obj, nCells, angularRange, dataFolder, eccs, isPlot)
+			%%
+			% nCells:		select nCells at the temporal meridian for each eccentricity; not used if nCells == nan
+			% angularRange:	select an annulus and use a sector of the given angularRange (rad) for each eccentricity; not used if angularRange == nan
+
+			if(~exist('radius', 'var') || isempty(radius))
+				radius = 0.5;		% degree
+			end
 			if(~exist('angularRange', 'var') || isempty(angularRange))
-				angularRange = [-pi pi] * 0.02;	% by default, a sector covering 2% of the area at the temporal field
+				angularRange = -1;%[-pi pi] * 0.02;	% by default, a sector covering 2% of the area at the temporal field
 			end
 			if( ~exist('dataFolder', 'var') || isempty(dataFolder) )
 				dataFolder = '../../Data/';
+            end
+            if(~exist('eccs', 'var') || isempty(eccs))
+            	eccs = [0 4 8];
             end
 			if(~exist('isPlot', 'var') || isempty(isPlot))
 				isPlot = true;
 			end
 
-			if(~isempty(obj.activityParams))
-				trials = obj.activityParams.trials;
-			else
-	            trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'A014.mat'));
-	        end
-            iTrial = find([trials.eccentricity] == 4 & [trials.spatialFreq] == 2, 1, 'first');
-
-			eccs = [0, 4, 8];%, 12];
-			for( iL = size(obj.layers,2) : -1 : 1 )
-				angles = cart2pol(obj.layers(iL).locations(:,1), obj.layers(iL).locations(:,2));
-				index = angularRange(1) <= angles & angles < angularRange(2);
-				
+			if(~isnan(nCells))	% select fixed number of cells (nCells) at each eccentricity
 				for( iEcc = size(eccs,2) : -1 : 1 )
-					d2 = sum( obj.layers(iL).locations.^2, 2 );
-					if( eccs(iEcc) == 0 )
-						idx = d2 <= trials(1).gratingWidth^2;
-					else
-						w = trials(1).gratingWidth/2;
-						idx = (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2;
-					end
+					d2 = sum( (cat(1, obj.layers.locations) - [eccs(iEcc), 0]).^2, 2 );
+					[~,idx] = sort(d2);
+					idx = idx(1:nCells);
+					tmpN = cumsum([0, cellfun(@(x) size(x,1), {obj.layers.locations})]);
+					for( iL = size(obj.layers,2) : -1 : 1 )
+						idxAllCells{iL,iEcc} = idx( tmpN(iL) < idx & idx <= tmpN(iL+1) ) - tmpN(iL);
+						nAllCells{iL,iEcc} = length(idxAllCells{iL,iEcc});
 
-					idxAllCells{iL,iEcc} = find(idx);
-					nAllCells{iL,iEcc} = length(idxAllCells{iL,iEcc});
-					
-					idxExampleCells{iL,iEcc} = find( idx & index );
-					nExampleCells{iL,iEcc} = length(idxExampleCells{iL,iEcc});
+						idxExampleCells{iL,iEcc} = idxAllCells{iL,iEcc};
+						nExampleCells{iL,iEcc} = length(idxExampleCells{iL,iEcc});
+					end
 				end
+
+			elseif(all(~isnan(angularRange)))
+				if(~isempty(obj.activityParams))
+					trials = obj.activityParams.trials;
+				else
+		            trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'Data/A014.mat'));
+		        end
+	            iTrial = find([trials.eccentricity] == 4 & [trials.spatialFreq] == 2, 1, 'first');
+
+				for( iL = size(obj.layers,2) : -1 : 1 )
+					angles = cart2pol(obj.layers(iL).locations(:,1), obj.layers(iL).locations(:,2));
+					index = angularRange(1) <= angles & angles < angularRange(2);
+					
+					for( iEcc = size(eccs,2) : -1 : 1 )
+						d2 = sum( obj.layers(iL).locations.^2, 2 );
+						if( eccs(iEcc) == 0 )
+							idx = d2 <= trials(1).gratingWidth^2;
+						else
+							w = trials(1).gratingWidth/2;
+							idx = (eccs(iEcc)-w)^2 <= d2 & d2 <= (eccs(iEcc)+w)^2;
+						end
+
+						idxAllCells{iL,iEcc} = find(idx);
+						nAllCells{iL,iEcc} = length(idxAllCells{iL,iEcc});
+						
+						idxExampleCells{iL,iEcc} = find( idx & index );
+						nExampleCells{iL,iEcc} = length(idxExampleCells{iL,iEcc});
+					end
+				end
+
+			else
+				fprintf('Must specify nCells or angularRange!\n');
+				return;
 			end
 
+
 			if(isPlot)
-				[noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(iTrial).backgroundImage), trials(iTrial).pixelAngle/60 );
-				grating0 = obj.GenerateGrating( 0, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
-				grating4 = obj.GenerateGrating( 4, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
-				grating8 = obj.GenerateGrating( 8, trials(iTrial).gratingWidth, trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60 );
+				if(~isnan(nCells))
+					[noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, 'noise/noise_1.bin'), 1/60 );
+					grating = obj.GenerateGrating( 2, 0, 1/60, -1, 45 );	% uniform grating across visual field
+				elseif(all(~isnan(angularRange)))
+					[noise, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(iTrial).backgroundImage), trials(iTrial).pixelAngle/60 );
+					grating0 = obj.GenerateGrating( trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60, 0, trials(iTrial).gratingWidth );
+					grating4 = obj.GenerateGrating( trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60, 4, trials(iTrial).gratingWidth );
+					grating8 = obj.GenerateGrating( trials(iTrial).spatialFreq, trials(iTrial).phase, trials(iTrial).pixelAngle/60, 8, trials(iTrial).gratingWidth );
+					grating = grating0 + grating4 + grating8;
+				end
 				
 				figure('NumberTitle', 'off', 'name', 'Example Cells', 'color', 'w');
 				pause(0.1);
@@ -492,17 +546,25 @@ classdef Encoder < handle
 				jf.setMaximized(1);
 				pause(1);
 				colors = {[1 0 0], [0 0 1], [1 0 1], [0 1 1]};
+                LimX = [ min(cellfun(@(loc,k) min(loc(k,1)), {obj.layers.locations}, {cat(1,idxAllCells{1,:}), cat(1,idxAllCells{2,:}), cat(1,idxAllCells{3,:}), cat(1,idxAllCells{4,:})})),...
+                         max(cellfun(@(loc,k) max(loc(k,1)), {obj.layers.locations}, {cat(1,idxAllCells{1,:}), cat(1,idxAllCells{2,:}), cat(1,idxAllCells{3,:}), cat(1,idxAllCells{4,:})}))];
+                LimY = [ min(cellfun(@(loc,k) min(loc(k,2)), {obj.layers.locations}, {cat(1,idxAllCells{1,:}), cat(1,idxAllCells{2,:}), cat(1,idxAllCells{3,:}), cat(1,idxAllCells{4,:})})),...
+                         max(cellfun(@(loc,k) max(loc(k,2)), {obj.layers.locations}, {cat(1,idxAllCells{1,:}), cat(1,idxAllCells{2,:}), cat(1,idxAllCells{3,:}), cat(1,idxAllCells{4,:})}))];
 				for(iL = 1 : 4)
 					subplot(2,2,iL)
-					imshow( (noise+grating0+grating4+grating8)*0.25 + 0.5, 'xdata', inputX([1 end]), 'ydata', inputY([1 end]) ); hold on;
+					imshow( (noise+grating)*0.25 + 0.5, 'xdata', inputX([1 end]), 'ydata', inputY([1 end]) ); hold on;
 					titleTxt = [obj.layers(iL).name ' | nCells='];
+					
 					for(iEcc = 1 : size(eccs,2))
-						plot( obj.layers(iL).locations(idxAllCells{iL,iEcc}, 1), obj.layers(iL).locations(idxAllCells{iL,iEcc}, 2), '.', 'color', colors{iL} );
-						plot( obj.layers(iL).locations(idxExampleCells{iL,iEcc}, 1), obj.layers(iL).locations(idxExampleCells{iL,iEcc}, 2), '.', 'color', colors{iL}/2 );
+						MarkerSize = norm(diff(obj.layers(iL).locations(idxExampleCells{iL,iEcc}(1:2), :),1)) * 138;
+						plot( obj.layers(iL).locations(idxAllCells{iL,iEcc}, 1), obj.layers(iL).locations(idxAllCells{iL,iEcc}, 2), '.', 'MarkerSize', MarkerSize, 'color', colors{iL} );
+						if(all(~isnan(angularRange)))
+							plot( obj.layers(iL).locations(idxExampleCells{iL,iEcc}, 1), obj.layers(iL).locations(idxExampleCells{iL,iEcc}, 2), '.', 'MarkerSize', MarkerSize, 'color', colors{iL}/2 );
+						end
 						titleTxt = [titleTxt num2str(nAllCells{iL,iEcc}) ', '];
 					end
 					title(titleTxt(1:end-2));
-					set( gca, 'xlim', [-1 1]*max(eccs)*1.1, 'ylim', [-1 1]*max(eccs)*1.1, 'ydir', 'normal', 'visible', 'on', 'fontsize', 18, 'lineWidth', 2 );
+					set( gca, 'xlim', LimX+[-0.3 0.3], 'ylim', LimY+[-0.3 0.3], 'ydir', 'normal', 'visible', 'on', 'fontsize', 18, 'lineWidth', 2 );
 					if(iL == 1 || iL == 3)
 						ylabel('Vertical position (deg)');
 					end
@@ -518,34 +580,36 @@ classdef Encoder < handle
 				jf.setMaximized(1);
 				pause(1);
 
-				% saccadeOn - flashOn, saccadeOff - flashOn
-				subplot(2, 3, 6); hold on;
-				centers = -100:5:100;
-				data = hist( ([trials.saccadeOn] - [trials.saccadeOff]) ./ [trials.sRate]*1000, centers );
-				bar( centers, data, 0.9, 'b', 'LineStyle', 'none', 'displayName', 'sacOn - sacOff' );
-				% data = hist( ([trials.saccadeOff] - [trials.flashOn]) ./ [trials.sRate]*1000, centers );
-				% bar( centers, data, 0.9, 'r', 'LineStyle', 'none', 'displayName', 'sacOff - flashOn' );
-				data = hist( ([trials.saccadeLand] - [trials.saccadeOff]) ./ [trials.sRate]*1000, centers );
-				bar( centers, data, 0.9, 'm', 'LineStyle', 'none', 'displayName', 'sacLand - sacOff' );
-				set( legend, 'location', 'northwest' );
-				xlabel('Time aligned to saccadeOff (ms)');
-				ylabel('Frequency');
-				set( gca, 'lineWidth', 2, 'fontsize', 16 );
+				if(exist('trials', 'var'))
+					% saccadeOn - flashOn, saccadeOff - flashOn
+					subplot(2, 3, 6); hold on;
+					centers = -100:5:100;
+					data = hist( ([trials.saccadeOn] - [trials.saccadeOff]) ./ [trials.sRate]*1000, centers );
+					bar( centers, data, 0.9, 'b', 'LineStyle', 'none', 'displayName', 'sacOn - sacOff' );
+					% data = hist( ([trials.saccadeOff] - [trials.flashOn]) ./ [trials.sRate]*1000, centers );
+					% bar( centers, data, 0.9, 'r', 'LineStyle', 'none', 'displayName', 'sacOff - flashOn' );
+					data = hist( ([trials.saccadeLand] - [trials.saccadeOff]) ./ [trials.sRate]*1000, centers );
+					bar( centers, data, 0.9, 'm', 'LineStyle', 'none', 'displayName', 'sacLand - sacOff' );
+					set( legend, 'location', 'northwest' );
+					xlabel('Time aligned to saccadeOff (ms)');
+					ylabel('Frequency');
+					set( gca, 'lineWidth', 2, 'fontsize', 16 );
 
-				% eye traces
-				% subplot(3, 2, 2); hold on;
-				% for( k = size(idx,2) : -1 : 1 )
-				% 	x = trials(idx(k)).x.position( -100+trials(idx(k)).saccadeLand : min(end, 100+trials(idx(k)).saccadeLand) );
-				% 	eyeX( k, 1:size(x,2) ) = x;
-				% end
-				% m = mean( eyeX, 1 );
-				% sd = std( eyeX, [], 1 );
-				% plot( -100:100, m, 'b', 'lineWidth', 2 );
-				% fill( [-100:100, 100:-1:-100], [m-sd, m(end:-1:1)+sd(end:-1:1)], 'b', 'LineStyle', 'none', 'FaceAlpha', 0.5 );
-				% plot( [0 0], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
-				% xlabel('Time aligned to saccadeLand');
-				% ylabel('Horizontal eye (mean+-std) (arcmin)');
-				% set( gca, 'lineWidth', 2, 'fontsize', 16 );
+					% eye traces
+					% subplot(3, 2, 2); hold on;
+					% for( k = size(idx,2) : -1 : 1 )
+					% 	x = trials(idx(k)).x.position( -100+trials(idx(k)).saccadeLand : min(end, 100+trials(idx(k)).saccadeLand) );
+					% 	eyeX( k, 1:size(x,2) ) = x;
+					% end
+					% m = mean( eyeX, 1 );
+					% sd = std( eyeX, [], 1 );
+					% plot( -100:100, m, 'b', 'lineWidth', 2 );
+					% fill( [-100:100, 100:-1:-100], [m-sd, m(end:-1:1)+sd(end:-1:1)], 'b', 'LineStyle', 'none', 'FaceAlpha', 0.5 );
+					% plot( [0 0], get(gca,'ylim'), 'k--', 'lineWidth', 2 );
+					% xlabel('Time aligned to saccadeLand');
+					% ylabel('Horizontal eye (mean+-std) (arcmin)');
+					% set( gca, 'lineWidth', 2, 'fontsize', 16 );
+				end
 
 				% cell spatial sensitivity function
 				colors = {[1 0 0], [0 0 1], [1 0 1], [0 1 1]};
@@ -1411,7 +1475,10 @@ classdef Encoder < handle
 	                        frSeg{iCond,iL} = LFR{iCond,iL}(:, max(1, tTicks(iTick)-tWin/2-timeRange(1)+1) : min(size(LFR{iCond,iL},2), tTicks(iTick)+tWin/2-timeRange(1)+1), :);
 						else
 							frAcc{iCond,iL} = cat( 1, frAcc{iCond,1}(:,:,:), frAcc{iCond,2}(:,:,:), frAcc{iCond,3}(:,:,:), frAcc{iCond,4}(:,:,:) );
-							frSeg{iCond,iL} = cat( 1, frSeg{iCond,1}(:,:,:), frSeg{iCond,2}(:,:,:), frSeg{iCond,3}(:,:,:), frSeg{iCond,4}(:,:,:) );
+							frSeg{iCond,iL} = cat( 1, frSeg{iCond,1}(:, max(1, tTicks(iTick)-tWin/2-timeRange(1)+1) : min(size(LFR{iCond,1},2), tTicks(iTick)+tWin/2-timeRange(1)+1), :),...
+													  frSeg{iCond,2}(:, max(1, tTicks(iTick)-tWin/2-timeRange(1)+1) : min(size(LFR{iCond,2},2), tTicks(iTick)+tWin/2-timeRange(1)+1), :),...
+													  frSeg{iCond,3}(:, max(1, tTicks(iTick)-tWin/2-timeRange(1)+1) : min(size(LFR{iCond,3},2), tTicks(iTick)+tWin/2-timeRange(1)+1), :),...
+													  frSeg{iCond,4}(:, max(1, tTicks(iTick)-tWin/2-timeRange(1)+1) : min(size(LFR{iCond,4},2), tTicks(iTick)+tWin/2-timeRange(1)+1), :) );
 						end
 					end
 
@@ -1431,11 +1498,36 @@ classdef Encoder < handle
 									y = w * shiftdim(nanmean(data,1),1);
 									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc)) + mean(y(T==0));	% compensate for the low sampling
 									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									thresholdAcc{iCond,iL} = prctile( y(T==0), 100 * (1 - fprFun(tTicks(iTick)-durOffset)) );		% set threshold at the level giving false alarm rate measured empirically
+									tprAccPredict(iL,k-1,iEcc,iTick) = sum( (y > thresholdAcc{iCond,iL}) == T & T == 1 ) / sum(T==1);	% true positive rate of prediction
+									tprAccPredictSD(iL,k-1,iEcc,iTick) = 0;
+									
+									data = cat( 3, frSeg{[iCond-k+1,iCond], iL} );	% catenate in the trials dimension
+									w = ones(1,size(data,2));		% uniform temporal weight
+									w = w / sum(w);
+									y = w * shiftdim(nanmean(data,1),1);
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									y = (y-min(y)) / (max(y)-min(y));
 									% if(tTicks(iTick) <= 50)
-										% thresholdAcc{iCond,iL} = prctile( y(T==0), 100 * (1 - fprFun(tTicks(iTick)-durOffset)) );		% set threshold at the level giving false alarm rate measured empirically
-										fa = fmincon(@(x) double(prctile(y(T==0), 100-x) - prctile(y(T==1), x))^2, 100*fprFun(tTicks(iTick)-durOffset), [], [], [], [], 0, 100, [], optimoptions('fmincon','Display','off'));
-										thresholdAcc{iCond,iL} = prctile( y(T==0), 100 - fa );
+										thresholdSeg{iCond,iL} = prctile( y(T==0), 100 * (1 - fprFun(tTicks(iTick))) );		% set threshold at the level giving false alarm rate measured empirically
 									% end
+									tprSegPredict(iL,k-1,iEcc,iTick) = sum( (y > thresholdSeg{iCond,iL}) == T & T == 1 ) / sum(T==1);	% true positive rate of prediction
+									tprSegPredictSD(iL,k-1,iEcc,iTick) = 0;
+								end
+
+							case 'thresholding-uni-no_bias'
+								%% ROC with thresholding, uniform weights across space and time
+								if( k > 1 )
+									T = [zeros(1,nTrials), ones(1,nTrials)];
+									data = cat( 3, frAcc{[iCond-k+1,iCond], iL} );	% catenate in the trials dimension
+									w = ones(1,size(data,2));		% uniform temporal weight
+									w = w / sum(w);
+									y = w * shiftdim(nanmean(data,1),1);
+									y(T==0) = (y(T==0) - mean(y(T==0))) / sqrt(cellNumAmplifier(iL,iEcc)) + mean(y(T==0));	% compensate for the low sampling
+									y(T==1) = (y(T==1) - mean(y(T==1))) / sqrt(cellNumAmplifier(iL,iEcc)) + mean(y(T==1));	% compensate for the low sampling
+									fa = fmincon(@(x) double(prctile(y(T==0), 100-x) - prctile(y(T==1), x))^2, 100*fprFun(tTicks(iTick)-durOffset), [], [], [], [], 0, 100, [], optimoptions('fmincon','Display','off'));
+									thresholdAcc{iCond,iL} = prctile( y(T==0), 100 - fa );
 									tprAccPredict(iL,k-1,iEcc,iTick) = sum( (y > thresholdAcc{iCond,iL}) == T & T == 1 ) / sum(T==1);	% true positive rate of prediction
 									tprAccPredictSD(iL,k-1,iEcc,iTick) = 0;
 									
@@ -2287,13 +2379,13 @@ classdef Encoder < handle
 		end
 
 
-		function [grating, inputX, inputY] = GenerateGrating(obj, radius, width, sf, phase, degPerPix)
-			%% generate a circular grating
-			%   radius:				radius of the grating (in the middle)
-			%	width:				width of the circle (deg)
+		function [grating, inputX, inputY] = GenerateGrating(obj, sf, phase, degPerPix, radius, width_or_orient)
+			%% generate a circular grating (radius >= 0) or a uniform grating across the whole image when radius < 0
 			%	sf:					spatial frequency (c/deg)
-			%	phase:				phase of the grating (0/1)
+			%	phase:				phase of the grating ([0,2*pi])
 			%	degPerPix:			number of degrees per pixel
+			%   radius:				radius of the grating (in the middle); uniform grating across whole image if radius < 0
+			%	width_or_orient:	width of the circle when radius >= 0 (deg); or orientation of the grating when radius < 0 (deg), 0 indicates vertical
 			%
 			%   grating:			pixel values of the grating (range of [-1 1]); 1st dimension for vertical, 2nd for horizontal
 			%	inputX:				horizontal coordinates of each pixel in img (deg)
@@ -2304,13 +2396,18 @@ classdef Encoder < handle
 			inputX = ( (1:w) - (1+w)/2 ) * degPerPix;
 			inputY = ( (1:h) - (1+h)/2 ) * degPerPix;
 
-			if(radius == 0)
-				width = width*2;
+			if(radius < 0)
+				orientation = width_or_orient;
+				grating = cos( 2*pi * sf * (inputX * cosd(orientation) + inputY' * sind(orientation)) + phase );
+            else
+    			r = sqrt( inputX.^2 + inputY'.^2 );
+				width = width_or_orient;
+				if(radius == 0)
+					width = width*2;
+				end
+				idx = abs(r - radius) < width/2;
+				grating(idx) = cos( pi * (r(idx)-radius) / width ) .* cos( 2*pi * sf * (r(idx)-radius) + phase );
 			end
-
-			r = sqrt( inputX.^2 + inputY'.^2 );
-			idx = abs(r - radius) < width/2;
-			grating(idx) = cos( pi * (r(idx)-radius) / width ) .* cos( 2*pi * sf * (r(idx)-radius) + phase*pi );
 		end
 
 

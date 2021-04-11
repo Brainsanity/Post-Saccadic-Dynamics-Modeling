@@ -3,50 +3,54 @@
 % encoder = Encoder([], false);   % H_s not 1
 
 %%
-for(fd = {	...
-			'Noise & Grating Simulated Separately', ...
-			...%'Noise & Grating Simulated Separately - Hs Not 1', ...
-			...%'Noise & Grating Simulated Separately - Drift Stabilized', ...
-			% 'Noise & Grating Simulated Separately - Saccade Stabilized (static+static+drift)', ...
-			})
+sbjs = {'A0HL', 'A092', 'A0NK'};
+for(iSbj = 1:nSbj)
+	sbj = sbjs{iSbj};
+	for(fd = {	...
+				'Noise & Grating Simulated Separately', ...
+				...%'Noise & Grating Simulated Separately - Hs Not 1', ...
+				...%'Noise & Grating Simulated Separately - Drift Stabilized', ...
+				% 'Noise & Grating Simulated Separately - Saccade Stabilized (static+static+drift)', ...
+				})
 
-	folder = fd{1};
+		folder = fd{1};
 
-	withInternalNoise = true;
-	% durOffset = 0;
-	durOffset = 57;
-	
-	% encoder.SimulateExampleCellsActivities([1 4 7], '../../Data', [], 'none', folder);
-	% encoder.SimulateExampleCellsActivities([1 4 7], '../../Data', [], 'drift', folder);
-	% encoder.SimulateExampleCellsActivities([1 4 7], '../../Data', [], 'saccade', folder);
+		withInternalNoise = true;
+		% durOffset = 0;
+		durOffset = 57;
+		
+		% encoder.SimulateExampleCellsActivities([1 4 7], '../../Data', [], 'none', folder);
+		% encoder.SimulateExampleCellsActivities([1 4 7], '../../Data', [], 'drift', folder);
+		% encoder.SimulateExampleCellsActivities([1 4 7], '../../Data', [], 'saccade', folder);
 
-	% gather data
-	% encoder.GatherSimulatedExampleCellsActivities('../../Data', folder);
-% 	encoder.LoadExampleCellsActivities(fullfile('../../Data/Simulated Activities', folder, [folder '.mat']));
+		% gather data
+		% encoder.GatherSimulatedExampleCellsActivities('../../Data', folder);
+	% 	encoder.LoadExampleCellsActivities(fullfile('../../Data/Simulated Activities', folder, [folder '.mat']));
 
-	% activity profiles
-	if(withInternalNoise)
-		figFolder = fullfile('../../Data/Simulated Activities', folder, 'figures - withInternalNoise');
-	else
-		figFolder = fullfile('../../Data/Simulated Activities', folder, 'figures');
-    end
-    if(~exist(figFolder, 'dir'))
-        mkdir(figFolder);
-    end
-	encoder.MeanPopulationActivity(withInternalNoise); drawnow;
-	saveas(gcf, fullfile(figFolder, 'Mean+SEM of Population Activity of Example Cells - Contrast=0.5.fig'));
-	saveas(gcf, fullfile(figFolder, 'Mean+SEM of Population Activity of Example Cells - Contrast=0.5.png'));
-	encoder.AccumulatedPopulationActivity(withInternalNoise); drawnow;
-	saveas(gcf, fullfile(figFolder, 'Mean+SEM of Mean Accumulated Population Activity of Example Cells - Contrast=0.5.fig'));
-	saveas(gcf, fullfile(figFolder, 'Mean+SEM of Mean Accumulated Population Activity of Example Cells - Contrast=0.5.png'));
-	% encoder.DetectionDynamics(durOffset);
+		% activity profiles
+		if(withInternalNoise)
+			figFolder = fullfile('../../Data/Simulated Activities', sbj, folder, 'figures - withInternalNoise');
+		else
+			figFolder = fullfile('../../Data/Simulated Activities', sbj, folder, 'figures');
+	    end
+	    if(~exist(figFolder, 'dir'))
+	        mkdir(figFolder);
+	    end
+		encoder.MeanPopulationActivity(withInternalNoise); drawnow;
+		saveas(gcf, fullfile(figFolder, 'Mean+SEM of Population Activity of Example Cells - Contrast=0.5.fig'));
+		saveas(gcf, fullfile(figFolder, 'Mean+SEM of Population Activity of Example Cells - Contrast=0.5.png'));
+		encoder.AccumulatedPopulationActivity(withInternalNoise); drawnow;
+		saveas(gcf, fullfile(figFolder, 'Mean+SEM of Mean Accumulated Population Activity of Example Cells - Contrast=0.5.fig'));
+		saveas(gcf, fullfile(figFolder, 'Mean+SEM of Mean Accumulated Population Activity of Example Cells - Contrast=0.5.png'));
+		% encoder.DetectionDynamics(durOffset);
 
-	clc;
-	encoder.ContrastDetection('thresholding-uni', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
-	% encoder.ContrastDetection('thresholding-uni-optim_fa', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
-	% encoder.ContrastDetection('thresholding-sw_sine-tw_uni', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
-	% encoder.ContrastDetection('thresholding-sw_uni-tw_dprime', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
-	% encoder.ContrastDetection('thresholding-sw_uni-tw_pval', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
+		clc;
+		encoder.ContrastDetection('thresholding-uni', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
+		% encoder.ContrastDetection('thresholding-uni-optim_fa', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
+		% encoder.ContrastDetection('thresholding-sw_sine-tw_uni', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
+		% encoder.ContrastDetection('thresholding-sw_uni-tw_dprime', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
+		% encoder.ContrastDetection('thresholding-sw_uni-tw_pval', 0.1, fullfile('../../Data/Simulated Activities', folder), durOffset, withInternalNoise);
+	end
 end
 
 
