@@ -105,7 +105,7 @@ classdef EmpiricalBox < handle
 		end
 
 		function [fpr, nNoPresent, durs, eccs] = FalsePositiveRate(sbj)
-			dataFolder = 'F:\Post Saccadic Dynamics Modeling\Data\Data';
+			dataFolder = '../../Data/Data';
 			dataFiles = dir( fullfile(dataFolder, 'A*.mat') );
 			subjects = {dataFiles.name};
 
@@ -149,7 +149,7 @@ classdef EmpiricalBox < handle
 		function [fpr, nNoPresent] = StimDur2FA(dataFolder)
 			%% analyze correlation between false alarm rate and stimulus duration
 			if( nargin() < 1 )
-				dataFolder = 'F:\Post Saccadic Dynamics Modeling\Data\Data';
+				dataFolder = '../../Data/Data';
 			end
 
 			dataFiles = dir( fullfile(dataFolder, 'A*.mat') );

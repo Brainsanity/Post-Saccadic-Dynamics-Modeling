@@ -1,10 +1,10 @@
 %%
 sbj = 'A014';
 encoder = Encoder([], true);
-folder = 'Noise & Grating Simulated Separately';
+folder = 'UG - Noise & Grating Simulated Separately';
 withInternalNoise = true;
-encoder.LoadExampleCellsActivities(fullfile('../../Data/Simulated Activities', sbj, folder, [folder '.mat']));
-saveFolder = '../../Manuscript/poster figures';
+encoder.LoadExampleCellsActivities(fullfile('../../Data/Simulated Activities', sbj, folder, ['All Conditions' '.mat']));
+saveFolder = '../../Manuscript/poster figures - 2';
 trials = encoder.activityParams.trials;
 egTrial = 3;
 
@@ -15,7 +15,8 @@ figure('color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaxim
 % stimulus + eye trace
 subplot(3, 3, [1 2 4 5]);
 [noise, inputX, inputY] = encoder.LoadNoise( fullfile('../../data', trials(1).backgroundImage), trials(1).pixelAngle/60 );
-[grating] = encoder.GenerateGrating( 0, 1.5, 2, 0, trials(1).pixelAngle/60 );
+% [grating] = encoder.GenerateGrating( 0, 1.5, 2, 0, trials(1).pixelAngle/60 );
+[grating] = encoder.GenerateGrating( 1.5, 0, trials(1).pixelAngle/60, -1, 45 );
 stimulus = (noise + grating) / 4 + 0.5;
 imshow( stimulus, 'XData', inputX([1 end]), 'YData', inputY([1 end]) ); hold on;
 plot(trials(egTrial).x.position(trials(egTrial).saccadeOn+(-100:500))/60,...
@@ -96,6 +97,25 @@ saveas(gcf, fullfile(saveFolder, 'Retinal input.png'));
 
 
 %%
+%%%%%% Cell Array %%%%%%
+nCells = 500;
+encoder.GetExampleCells(nCells, nan, '../../Data', [0 4 8], true);
+h = get(gcf, 'children');
+set(h, 'FontSize', 26);
+h(1).Title.String = 'M Off';
+h(2).Title.String = 'M On';
+h(3).Title.String = 'P Off';
+h(4).Title.String = 'P On';
+% h(1).Title.FontSize = 30;
+% h(2).Title.FontSize = 30;
+% h(3).Title.FontSize = 30;
+% h(4).Title.FontSize = 30;
+h(1).XLabel.String = 'Hor. position (\circ)';
+h(2).XLabel.String = 'Hor. position (\circ)';
+h(2).YLabel.String = 'Ver. position (\circ)';
+h(4).YLabel.String = 'Ver. position (\circ)';
+
+%%
 %%%%%% Radius VS Spacing %%%%%%
 encoder.SpatialModel.DisplaySpacing2RadiusFitting();
 set(findobj(gcf, 'type', 'axes'), 'FontSize', 26, 'lineWidth', 2);
@@ -121,6 +141,7 @@ end
 %%
 %%%%%% Example neuronal activity %%%%%%
 t = [-150 550];
+iL = 1;
 frBG = encoder.ExampleCellsActivitiesOnCondition(encoder.layers(iL).name, 0, 0, 0, 'saccadeOff', t, false, true);	% P On cells
 fr2 = encoder.ExampleCellsActivitiesOnCondition(encoder.layers(iL).name, 0, 2, 0.5, 'saccadeOff', t, false, true);
 fr10 = encoder.ExampleCellsActivitiesOnCondition(encoder.layers(iL).name, 0, 10, 0.5, 'saccadeOff', t, false, true);
@@ -152,6 +173,7 @@ pos = get(gca, 'position');
 set(gca, 'position', [pos(1:2), pos(3)/2, pos(4)/1.4]);
 
 % average across cells for egTrial
+egTrial = 15;
 subplot(2,2,2); hold on; h = [];
 data = cat(3, frBG(:,:,egTrial), fr2(:,:,egTrial), fr10(:,:,egTrial));
 for(k = 1:3)
@@ -213,6 +235,7 @@ for(iTrial = idx)
 	hAxes(iPlot) = axes( 'Position', [0.07+0.96/3*(mod(iPlot-1,5)), 0.2+0.92/2, 0.96/3-0.03, 0.9/2-0.04], ...
 			             'xlim', t, 'xtick', t(1):200:t(2), 'ylim', [0 1.5], 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
 	data = cat(3, frBG(:,:,iTrial), fr2(:,:,iTrial));
+    h = [];
 	for(k = 1:2)
 		m = mean(data(:,:,k), 1);
 		sem = std(data(:,:,k), [], 1) ./ sqrt(size(data,1));
@@ -282,6 +305,7 @@ Eccs = [0 4 8]; nEccs = size(Eccs,2);
 for(iSF = 1:nSFs)
 	axes( 'Position', [0.07+0.96/3*2, 0.125+0.92/2*(2-iSF), 0.2620, 0.9/2-0.04], ...
 		  'xlim', [0 550], 'xtick', durs(2:end), 'ylim', [0.9 45], 'ytick', [1 10], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
+    h= [];
 	ind = cell(1,nEccs);
 	modelSen = zeros(nEccs, 4);
 	for(iEcc = 1:nEccs)
@@ -310,7 +334,7 @@ for(iSF = 1:nSFs)
     set(gca, 'YTickLabel', sprintf('%g\n',(get(gca, 'YTick'))));
     if(iSF == 1)
     	legend(h, 'location', 'best');
-    	set(gca, 'xtick', []);
+    	set(gca, 'xticklabel', []);
     else
     	xlabel('Time from saccade off (ms)');
     end
@@ -319,29 +343,30 @@ end
 %% model
 for(iSF = 1:nSFs)
 	axes( 'Position', [0.07+0.96/3*1, 0.125+0.92/2*(2-iSF), 0.2620, 0.9/2-0.04], ...
-		  'xlim', [0 550], 'xtick', durs(2:end), 'ylim', [0.9 45], 'ytick', [1 10], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
+		  'xlim', [-25 525], 'xtick', durs(1:end), 'ylim', [0.9 45], 'ytick', [1 10], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
     h = [];
 	ind = cell(1,nEccs);
 	modelSen = zeros(nEccs, 4);
 	for(iEcc = 1:nEccs)
 		modelSen(iEcc,:) = 1./squeeze(Thresholds(5,iSF,iEcc,:));
-		h(iEcc) = plot(durs(2:end), modelSen(iEcc, 2:end), 's-', 'color', colors{iEcc}, 'MarkerSize', 16, 'LineWidth', 2, 'DisplayName', sprintf('Ecc=%d, model', Eccs(iEcc)));
+		h(iEcc) = plot(durs(1:end), modelSen(iEcc, 1:end), 's-', 'color', colors{iEcc}, 'MarkerSize', 16, 'LineWidth', 2, 'DisplayName', sprintf('Ecc=%d, model', Eccs(iEcc)));
 	end
 	ylabel('Sensitivity');
     set(gca, 'YTickLabel', sprintf('%g\n',(get(gca, 'YTick'))));
     if(iSF == 1)
     	legend(h, 'location', 'best');
-    	set(gca, 'xtick', []);
+    	set(gca, 'xticklabel', []);
     else
     	xlabel('Time from saccade off (ms)');
     end
+    set(gca, 'ylim', [0.4 12]);
 end
 
 
 %%
 %%%%%% Stabilization %%%%%%
-driftStab = load(fullfile(root, 'Simulated Activities', sbj, 'Noise & Grating Simulated Separately - Drift Stabilized', 'figures - withInternalNoise/thresholding-uni - durOffset=57/PerformanceData.mat'));
-sacStab = load(fullfile(root, 'Simulated Activities', sbj, 'Noise & Grating Simulated Separately - Saccade Stabilized (static+static+drift)', 'figures - withInternalNoise/thresholding-uni - durOffset=57/PerformanceData.mat'));
+driftStab = load(fullfile(root, 'Simulated Activities', sbj, 'UG - Noise & Grating Simulated Separately - Drift Stabilized', 'figures - withInternalNoise/thresholding-uni - durOffset=57/PerformanceData.mat'));
+sacStab = load(fullfile(root, 'Simulated Activities', sbj, 'UG - Noise & Grating Simulated Separately - Saccade Stabilized', 'figures - withInternalNoise/thresholding-uni - durOffset=57/PerformanceData.mat'));
 stabThresholds = {driftStab.Thresholds, sacStab.Thresholds};
 stabNames = {'drift stabilized', 'saccade stabilized'};
 figure('color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
@@ -352,13 +377,13 @@ Eccs = [0 4 8]; nEccs = size(Eccs,2);
 
 for(iSF = 1:nSFs)
 	for(iStab = 1:2)
-		axes( 'Position', [0.07+0.96/3*(iStab, 0.125+0.92/2*(2-iSF), 0.2620, 0.9/2-0.04], ...
+		axes( 'Position', [0.27+0.96/2.5*(iStab-1), 0.125+0.92/2*(2-iSF), 0.32, 0.9/2-0.04], ...
 			  'xlim', [-25 525], 'xtick', durs,  'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
 	    h = [];
 		ind = cell(1,nEccs);
 		modelSen = zeros(nEccs, 4);
 		for(iEcc = 1:nEccs)
-			modelSen(iEcc,:) = 1./squeeze(Thresholds(5,iSF,iEcc,:));
+			modelSen(iEcc,:) = 1./squeeze(Thresholds(set5,iSF,iEcc,:));
 			modelSenStab(iEcc,:) = 1./squeeze(stabThresholds{iStab}(5,iSF,iEcc,:));
 			h(iEcc) = plot(durs(1:end), modelSen(iEcc, 1:end), 's-', 'color', colors{iEcc}, 'MarkerSize', 16, 'LineWidth', 2, 'DisplayName', sprintf('Ecc=%d, unstabilized', Eccs(iEcc)));
 			h(iEcc+nEccs) = plot(durs(1:end), modelSenStab(iEcc, 1:end), 'd--', 'color', colors{iEcc}, 'MarkerSize', 16, 'LineWidth', 2, 'DisplayName', sprintf('Ecc=%d, stabilized', Eccs(iEcc)));
@@ -366,12 +391,12 @@ for(iSF = 1:nSFs)
 		ylabel('Sensitivity');
 	    if(iSF == 1)
 	    	if(iStab == 1)
-		    	legend(h, 'position', [0.1194 0.6487 0.2047 0.2842]);
+		    	legend(h, 'position', [0.0043 0.6518 0.2047 0.2842]);
 		    end
-	    	set(gca, 'xtick', [], 'ylim', [2 22], 'ytick', [3 10]);
+	    	set(gca, 'xticklabel', [], 'ylim', [0.035 12], 'ytick', [3 10]);
 	    else
 	    	xlabel('Time from saccade off (ms)');
-            set(gca, 'ylim', [0.3 25], 'ytick', [1 10]);
+            set(gca, 'ylim', [0.2 12], 'ytick', [1 10]);
 	    end
 	    set(gca, 'YTickLabel', sprintf('%g\n',(get(gca, 'YTick'))));
 	end
