@@ -2231,6 +2231,8 @@ classdef Encoder < handle
 			if( true||~exist('Thresholds', 'var') )
 				Thresholds = zeros(size(layerNames,2),nSFs,nEccs,size(durs,2));
 				ThresholdsSTD = Thresholds;
+				Sensitivities = Thresholds;
+				SensitivitiesSTD = Thresholds;
 				fitThreshold = true;
 			else
 				fitThreshold = false;true;
@@ -2288,6 +2290,8 @@ classdef Encoder < handle
 									stdPar(1) = std(nPar(1,goodIdx));
 									thresh = mean(nThresh(goodIdx));
 									stdThresh = std(nThresh(goodIdx));
+									sense = mean(1./nThresh(goodIdx));
+									stdSense = std(1./nThresh(goodIdx));
 									% x = linspace( 0, max(contrasts)*1.1, 10000 );
 									% x = 1e-6:0.001:max(contrasts)*1.1;
 									x = 10.^(linspace( -6, log10(max(contrasts)*1.1), 10000 ));
@@ -2301,9 +2305,13 @@ classdef Encoder < handle
 
 									Thresholds(iL,iSF,iEcc,iDur) = thresh;
 									ThresholdsSTD(iL,iSF,iEcc,iDur) = stdThresh;
+									Sensitivities(iL,iSF,iEcc,iDur) = sense;
+									SensitivitiesSTD(iL,iSF,iEcc,iDur) = stdSense;
 								else
 									Thresholds(iL,iSF,iEcc,iDur) = nan;
 									ThresholdsSTD(iL,iSF,iEcc,iDur) = nan;
+									Sensitivities(iL,iSF,iEcc,iDur) = nan;
+									SensitivitiesSTD(iL,iSF,iEcc,iDur) = nan;
 								end
 							end
 						end
@@ -2328,7 +2336,7 @@ classdef Encoder < handle
 			end
 
 			if(fitThreshold)
-                save( fullfile(dataFolder, 'PerformanceData.mat'), 'tTicks', 'accTPRm', 'segTPRm', 'conditions', 'durs', 'Thresholds', 'ThresholdsSTD' );
+                save( fullfile(dataFolder, 'PerformanceData.mat'), 'tTicks', 'accTPRm', 'segTPRm', 'conditions', 'durs', 'Thresholds', 'ThresholdsSTD', 'Sensitivities', 'SensitivitiesSTD' );
 			end
 
 

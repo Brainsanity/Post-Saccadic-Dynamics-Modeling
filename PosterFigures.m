@@ -299,7 +299,7 @@ root = '../../Data';
 load(fullfile(root, 'Simulated Activities', sbj, folder, 'figures - withInternalNoise/thresholding-uni - durOffset=57/PerformanceData.mat'));
 load(fullfile(root, 'Data/statsTable.mat'));
 colors = {'r', 'g', 'b', [1 0.5 0.5], [0.5 1 0.5], [0.5 0.5 1], [0.5 0 0], [0 0.5 0], [0 0 0.5]};
-durs = [0 50 150 500];
+% durs = [0 50 150 500];
 SFs = [2 10]; nSFs = size(SFs,2);
 Eccs = [0 4 8]; nEccs = size(Eccs,2);
 for(iSF = 1:nSFs)
@@ -307,7 +307,7 @@ for(iSF = 1:nSFs)
 		  'xlim', [0 550], 'xtick', durs(2:end), 'ylim', [0.9 45], 'ytick', [1 10], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
     h= [];
 	ind = cell(1,nEccs);
-	modelSen = zeros(nEccs, 4);
+	modelSen = zeros(nEccs, size(durs,2));
 	for(iEcc = 1:nEccs)
 		empiricalSen = statsTable.logSens{find(statsTable.spatialFreq == SFs(iSF) & statsTable.eccentricity == Eccs(iEcc), 1, 'last')};
 		empiricalSenSD = statsTable.logSensSD{find(statsTable.spatialFreq == SFs(iSF) & statsTable.eccentricity == Eccs(iEcc), 1, 'last')};
@@ -343,13 +343,15 @@ end
 %% model
 for(iSF = 1:nSFs)
 	axes( 'Position', [0.07+0.96/3*1, 0.125+0.92/2*(2-iSF), 0.2620, 0.9/2-0.04], ...
-		  'xlim', [-25 525], 'xtick', durs(1:end), 'ylim', [0.9 45], 'ytick', [1 10], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
+		  'xlim', [-25 525], 'xtick', 0:150:500, 'ylim', [0.9 45], 'ytick', [1 10], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
     h = [];
 	ind = cell(1,nEccs);
-	modelSen = zeros(nEccs, 4);
+	modelSen = zeros(nEccs, size(durs,2));
 	for(iEcc = 1:nEccs)
-		modelSen(iEcc,:) = 1./squeeze(Thresholds(5,iSF,iEcc,:));
-		h(iEcc) = plot(durs(1:end), modelSen(iEcc, 1:end), 's-', 'color', colors{iEcc}, 'MarkerSize', 16, 'LineWidth', 2, 'DisplayName', sprintf('Ecc=%d, model', Eccs(iEcc)));
+		modelSen(iEcc,:) = Sensitivities(5,iSF,iEcc,:);
+		modelSenSD(iEcc,:) = SensitivitiesSTD(5,iSF,iEcc,:);
+        fill([durs fliplr(durs)], [modelSen(iEcc,:) + modelSenSD(iEcc,:), fliplr(modelSen(iEcc,:) - modelSenSD(iEcc,:))], 'k', 'facecolor', colors{iEcc}, 'FaceAlpha', 0.5, 'LineStyle', 'none');
+		h(iEcc) = plot(durs(1:end), modelSen(iEcc, 1:end), '-', 'color', colors{iEcc}, 'MarkerSize', 16, 'LineWidth', 2, 'DisplayName', sprintf('Ecc=%d, model', Eccs(iEcc)));
 	end
 	ylabel('Sensitivity');
     set(gca, 'YTickLabel', sprintf('%g\n',(get(gca, 'YTick'))));
@@ -359,7 +361,7 @@ for(iSF = 1:nSFs)
     else
     	xlabel('Time from saccade off (ms)');
     end
-    set(gca, 'ylim', [0.4 12]);
+    set(gca, 'ylim', [0.25 12]);
 end
 
 
