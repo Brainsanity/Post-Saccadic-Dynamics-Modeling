@@ -6,6 +6,31 @@ classdef EmpiricalBox < handle
 	end
 
 	methods (Static)
+		function trials = LoadSacDB(folder)
+			if(~exist('folder', 'var') || isempty(folder))
+				folder = 'F:/Post Saccadic Dynamics Modeling/Data/Saccade DB';
+			end
+
+			if(~exist(fullfile(folder, 'trials.mat')))
+				load(fullfile(folder, 'traces_OSRemoved.mat'));
+				trials = traces;
+				for(iTrial = 1 : size(trials,2))
+					trials(iTrial).x = struct('position', trials(iTrial).x - trials(iTrial).x(1));
+					trials(iTrial).y = struct('position', trials(iTrial).y - trials(iTrial).y(1));
+					trials(iTrial).flashOn = trials(iTrial).saccades.start + round(trials(iTrial).saccades.duration/3);		% in samples
+					trials(iTrial).saccadeOn = trials(iTrial).saccades.start;
+					trials(iTrial).saccadeOff = trials(iTrial).saccades.start + trials(iTrial).saccades.duration - 1;
+					trials(iTrial).sRate = 1000;
+					trials(iTrial).backgroundImage = sprintf('noise_%d', randi(999));
+					trials(iTrial).pixelAngle = 1;
+					trials(iTrial).phase = rand() * 2*pi;
+				end
+				save(fullfile(folder, 'trials.mat'), 'trials');
+			else
+				load(fullfile(folder, 'trials.mat'));
+			end
+		end
+
 		function trials = LoadSingleData(dataFile, isDriftOnly)
 			%% load data for one single subject
 			if(~exist('isDriftOnly', 'var') || isempty(isDriftOnly))

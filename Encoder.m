@@ -249,7 +249,7 @@ classdef Encoder < handle
 
 
 		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, stimulus, saveFolder)
-			%% Show example modeled cells at locations (0,0), (0,4), (0,8), (0,12)
+			%% Simulate activities of modeled cells at locations (0,0), (0,4), (0,8), (0,12)
 			%	idxConditions:		indices of conditions to run, by default run all 9 conditions
 			%   dataFolder:			folder containing experiment data and noise background
 			%	alignEvent:			'saccadeOn', 'saccadeOff', 'flashOn'
@@ -407,6 +407,190 @@ classdef Encoder < handle
 		                    yIdx = min(y(eyeIdx{m})) + min(obj.layers(iL).locations(idxExampleCells{iL,iEcc},2)) - 4 <= inputY & inputY <= max(y(eyeIdx{m})) + max(obj.layers(iL).locations(idxExampleCells{iL,iEcc},2)) + 4; %300 : 780;
 	                    
 							[sFR{iL}(:,eyeIdx{m},k), sFR_c{iL}(:,eyeIdx{m},k), sFR_s{iL}(:,eyeIdx{m},k)] = obj.SpatialModel.LinearResponse( stimulus(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx{m}), y(eyeIdx{m}), obj.layers(iL).sRFParams(idxExampleCells{iL,iEcc}), obj.layers(iL).locations(idxExampleCells{iL,iEcc},1), obj.layers(iL).locations(idxExampleCells{iL,iEcc},2));
+						end
+						if( lower(obj.layers(iL).name(1)) == 'm' )
+							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR{iL}(:,:,k) );
+						else
+							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR_c{iL}(:,:,k), sFR_s{iL}(:,:,k) );
+						end
+						fprintf(' | t=%f\n', toc);
+					end
+					
+				end
+				if(isempty(idx))
+					time{iCond} = [];
+				else
+					time{iCond} = (tMin:tMax) / trials(idx(1)).sRate * 1000;
+				end
+
+				lfr = LFR(iCond,:);
+				save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
+			end
+            
+            % save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
+		end
+
+
+		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities_SacDB(obj, idxConditions, dataFolder, alignEvent, stabilize, saveFolder)
+			%% Simulate activities of modeled cells at a series of eccentricities (0,0:2:14), given eye traces from the saccade database (SacDB)
+			%	idxConditions:		indices of conditions to run, by default run all 9 conditions
+			%   dataFolder:			folder containing experiment data and noise background
+			%	alignEvent:			'saccadeOn', 'saccadeOff', 'flashOn'
+			%   contrast:			contrast of grating
+			%   stabilize:			'normal' (no stabilization), 'drift' (only stabilize drift), or 'full' (full stabilization)
+
+			if( ~exist('idxConditions', 'var') || isempty(idxConditions) )
+				idxConditions = 1:9;
+			end
+			if( ~exist('dataFolder', 'var') || isempty(dataFolder) )
+				dataFolder = '../../Data/';
+			end
+			if( ~exist('alignEvent', 'var') || isempty(alignEvent) )
+				alignEvent = 'saccadeOff'; %'saccadeLand';%
+			end
+			if( ~exist('stabilize', 'var') || isempty(stabilize) )
+				stabilize = 'normal';
+			end
+			if( ~exist('saveFolder', 'var') || isempty(saveFolder) )
+				saveFolder = sprintf( 'Example Cells LFR' ); %sprintf( 'Example Cells LFR; contrast = %f', contrast );
+			end
+			if( saveFolder(end) == '/' || saveFolder(end) == '\' )
+				saveFolder(end) = [];
+			end
+
+			sbj = 'SacDB';
+			if( ~exist(fullfile(dataFolder,'Simulated Activities',sbj,saveFolder), 'dir') )
+				mkdir( fullfile(dataFolder,'Simulated Activities',sbj,saveFolder) );
+			end
+
+			trials = EmpiricalBox.LoadSacDB();
+			nTrials = size(trials,2);
+
+			conditions = struct( ...
+							'eccentricity',	num2cell(reshape(repmat(0:2:14, 3, 1), 1, [])), ... %{  0,   0,    0,   4,   4,   4,   8,   8,   8 }, ...
+							'sf',			num2cell(repmat([0 2 10], 1, size(0:2:14, 2))), ... %{  0,   2,   10,   0,   2,  10,   0,   2,  10 }, ...		% sf=0 means noise alone
+							'duration',		{600}, ...
+							'alignEvent',	{alignEvent} );
+			
+			[conditions.duration] = deal(600);
+			[conditions.alignEvent] = deal(alignEvent);
+
+			Eccs = unique([conditions.eccentricity]);
+
+			stimulus = 'uniform';
+			if(strcmpi(stimulus, 'annulus'))
+				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nan, [-pi pi]*0.02, dataFolder, Eccs, false);
+			elseif(strcmpi(stimulus, 'uniform'))
+				nCells = 500;
+				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nCells, nan, dataFolder, Eccs, false);
+			else
+				fprintf('Argument stimulus must be ''annulus'' or ''uniform''!\n');
+				return;
+			end
+
+			for( iCond = sort(idxConditions, 'descend') )
+				iEcc = find( conditions(iCond).eccentricity == Eccs );
+				trialsIdx{iCond} = 1 : nTrials;
+
+				idx = trialsIdx{iCond};
+				tMax = round(max( [trials(idx).saccadeOff] + round(conditions(iCond).duration/1000*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));	% in samples
+				tMin = round(min( [trials(idx).saccadeOn] - round(0.150*[trials(idx).sRate]) - [trials(idx).(alignEvent)] ));				% in samples
+				for( iL = 4 : -1 : 1 )
+					sFR{iL} = zeros( nExampleCells{iL,iEcc}, tMax-tMin+1, size(idx,2), 'single' );		% 1st dim: neurons;		2nd dim: time;		3rd dim: trials;
+				end
+				sFR_c = sFR;
+				sFR_s = sFR;
+				LFR(iCond,:) = sFR;
+				for( k = size(idx,2) : -1 : 1 )
+					% tic;
+					index = tMin + trials(idx(k)).(alignEvent) : min( size(trials(idx(k)).x.position,2), tMax + trials(idx(k)).(alignEvent) );
+					x  = trials(idx(k)).x.position(index) / 60;
+					y  = trials(idx(k)).y.position(index) / 60;
+                    
+					% before saccade
+					eyeIdx{1} = 1 : trials(idx(k)).saccadeOn - trials(idx(k)).(alignEvent) - tMin;
+					s1 = size(eyeIdx{1},2);
+
+					% during saccade
+					eyeIdx{2} = eyeIdx{1}(end) + ( 1 : trials(idx(k)).saccadeOff - trials(idx(k)).saccadeOn + 1 );
+					s2 = size(eyeIdx{2},2);
+
+					% after saccade
+					eyeIdx{3} = eyeIdx{2}(end)+1 : size(x,2);
+					s3 = size(eyeIdx{3},2);
+
+					if( strcmpi( stabilize, 'drift' ) )
+						x(eyeIdx{1}) = x(eyeIdx{1}(end));
+						y(eyeIdx{1}) = y(eyeIdx{1}(end));
+						x(eyeIdx{3}) = x(eyeIdx{3}(1));
+						y(eyeIdx{3}) = y(eyeIdx{3}(1));
+
+					elseif( strcmpi( stabilize, 'saccade' ) )
+						% only stabilize saccade period
+						if(false)
+	                        eyeIdx{2} = [eyeIdx{1}(end-24:end), eyeIdx{2}, eyeIdx{3}(1:25)];
+	                        eyeIdx{1} = eyeIdx{1}(1:end-25);
+	                        eyeIdx{3} = eyeIdx{3}(26:end);
+							x(eyeIdx{1}) = x(eyeIdx{3}(1)) + x(eyeIdx{1}) - x(eyeIdx{1}(end));
+							x(eyeIdx{2}) = x(eyeIdx{3}(1));
+	                        y(eyeIdx{1}) = y(eyeIdx{3}(1)) + y(eyeIdx{1}) - y(eyeIdx{1}(end));
+							y(eyeIdx{2}) = y(eyeIdx{3}(1));
+
+						% stabilize both saccade and pre-saccade drift
+						else
+							eyeIdx{2} = [eyeIdx{1}(end-24:end), eyeIdx{2}, eyeIdx{3}(1:25)];
+	                        eyeIdx{1} = eyeIdx{1}(1:end-25);
+	                        eyeIdx{3} = eyeIdx{3}(26:end);
+							x(eyeIdx{1}) = x(eyeIdx{3}(1));
+							x(eyeIdx{2}) = x(eyeIdx{3}(1));
+	                        y(eyeIdx{1}) = y(eyeIdx{3}(1));
+							y(eyeIdx{2}) = y(eyeIdx{3}(1));
+						end
+						
+					elseif( strcmpi( stabilize, 'full' ) )
+						x(:) = x(eyeIdx{3}(1));
+						y(:) = y(eyeIdx{3}(1));
+					end
+
+					% hold on;
+					% plot(eyeIdx{1}, x(eyeIdx{1}), 'b', 'tag', num2str(k));
+					% plot(eyeIdx{2}, x(eyeIdx{2}), 'c', 'tag', num2str(k));
+					% plot(eyeIdx{3}, x(eyeIdx{3}), 'b', 'tag', num2str(k));
+					% plot(eyeIdx{1}, y(eyeIdx{1}), 'r', 'tag', num2str(k));
+					% plot(eyeIdx{2}, y(eyeIdx{2}), 'm', 'tag', num2str(k));
+					% plot(eyeIdx{3}, y(eyeIdx{3}), 'r', 'tag', num2str(k));
+					% if(k == 1)
+					% 	return;
+					% else
+					% 	continue;
+					% end
+
+					if(conditions(iCond).sf == 0)
+	                    [stimulus, inputX, inputY] = obj.LoadNoise( fullfile(dataFolder, trials(idx(k)).backgroundImage), trials(idx(k)).pixelAngle/60 );
+	                    stimulus = stimulus * 0.5;		% noise at a contrast of 0.5
+	                else
+	                	% full contrast grating
+	                	if(strcmpi(stimulus, 'annulus'))	% annulus grating
+							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60, conditions(iCond).eccentricity, trials(idx(k)).gratingWidth );
+						elseif(strcmpi(stimulus, 'uniform'))	% uniform grating across the whole visual field
+							rndPhase = str2double(trials(mod(idx(k),end)+1).backgroundImage(find(trials(mod(idx(k),end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for phase
+							rndOri = str2double(trials(mod(idx(k)+1,end)+1).backgroundImage(find(trials(mod(idx(k)+1,end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for orientation
+							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, mod(rndPhase,100)/100*2*pi, trials(idx(k)).pixelAngle/60, -1, mod(rndOri,100)/100*360 );
+						end
+					end
+                    
+					avContrast = 0.5;
+
+					for( iL = 1:4 )
+						fprintf('iCond=%d, Ecc=%d, SF=%d, iTrials=%d/%d, iL=%d, ...', iCond, conditions(iCond).eccentricity, conditions(iCond).sf, k, size(idx,2), iL);
+						tic;
+						for( m = 1 : 3 )
+							d = max([obj.layers(iL).sRFParams(idxExampleCells{iL,iEcc}).surroundRadii]) * 5;		% extra space beyond given cells
+							cellLocs = obj.layers(iL).locations(idxExampleCells{iL,iEcc}, :) - mean(obj.layers(iL).locations(idxExampleCells{iL,iEcc}, :), 1);	% bring the cells to the center
+							xIdx = min(x(eyeIdx{m})) + min(cellLocs(:,1)) - d <= inputX & inputX <= max(x(eyeIdx{m})) + max(cellLocs(:,1)) + d;
+		                    yIdx = min(y(eyeIdx{m})) + min(cellLocs(:,2)) - d <= inputY & inputY <= max(y(eyeIdx{m})) + max(cellLocs(:,2)) + d;
+	                    
+							[sFR{iL}(:,eyeIdx{m},k), sFR_c{iL}(:,eyeIdx{m},k), sFR_s{iL}(:,eyeIdx{m},k)] = obj.SpatialModel.LinearResponse( stimulus(yIdx,xIdx), inputX(xIdx), inputY(yIdx), x(eyeIdx{m}), y(eyeIdx{m}), obj.layers(iL).sRFParams(idxExampleCells{iL,iEcc}), cellLocs(:,1), cellLocs(:,2));
 						end
 						if( lower(obj.layers(iL).name(1)) == 'm' )
 							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR{iL}(:,:,k) );
@@ -654,7 +838,7 @@ classdef Encoder < handle
 							h(end+1) = plot( tf, m, 'color', colors{iL}/2, 'lineWidth', 2, 'displayName', [obj.layers(iL).name ' Surround'] );
 							fill( [tf, tf(end:-1:1)], [m-sem, m(end:-1:1)+sem(end:-1:1)], 'k', 'FaceColor', colors{iL}, 'LineStyle', 'none', 'FaceAlpha', 0.5 );
 						else
-							S = obj.TemporalModel.TemporalSensitivity( obj.layers(iL).name, obj.layers(iL).tRFParams(idx), tf, 1 );
+							S = obj.TemporalModel.TemporalSensitivity( obj.layers(iL).name, obj.layers(iL).tRFParams(idx), tf, 0.5 );
 							m = mean(S,1);
 							sem = std(S, [], 1);% / sqrt(nCells);
 							h(end+1) = plot( tf, m, 'color', colors{iL}, 'lineWidth', 2, 'displayName', obj.layers(iL).name );
