@@ -8,7 +8,7 @@ classdef EmpiricalBox < handle
 	methods (Static)
 		function trials = LoadSacDB(folder)
 			if(~exist('folder', 'var') || isempty(folder))
-				folder = 'F:/Post Saccadic Dynamics Modeling/Data/Saccade DB';
+				folder = '../../Data/Saccade DB';
 			end
 
 			if(~exist(fullfile(folder, 'trials.mat')))
@@ -21,7 +21,7 @@ classdef EmpiricalBox < handle
 					trials(iTrial).saccadeOn = trials(iTrial).saccades.start;
 					trials(iTrial).saccadeOff = trials(iTrial).saccades.start + trials(iTrial).saccades.duration - 1;
 					trials(iTrial).sRate = 1000;
-					trials(iTrial).backgroundImage = sprintf('noise_%d', randi(999));
+					trials(iTrial).backgroundImage = sprintf('noise/noise_%d.bin', randi(999));
 					trials(iTrial).pixelAngle = 1;
 					trials(iTrial).phase = rand() * 2*pi;
 				end
