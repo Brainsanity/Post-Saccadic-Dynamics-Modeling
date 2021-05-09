@@ -638,6 +638,7 @@ classdef Encoder < handle
 					end
 
 					if(toc(t0) > nHours * 3600)
+						fprintf('Times up, saving data...\n');
 						if(isempty(idx))
 							time{iCond} = [];
 						else
@@ -646,6 +647,8 @@ classdef Encoder < handle
 
 						lfr = LFR(iCond,:);
 						save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
+						fprintf('Data saved!\n');
+						return;
 					end
 					
 				end
