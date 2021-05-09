@@ -283,6 +283,8 @@ classdef Encoder < handle
 				mkdir( fullfile(dataFolder,'Simulated Activities',sbj,saveFolder) );
 			end
 
+			TimeLimit = nHours * 3600;		% ms
+
 			t0 = tic;
 
 			trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'Data', [sbj '.mat']));
@@ -428,7 +430,7 @@ classdef Encoder < handle
 						fprintf(' | t=%f\n', toc(t1));
 					end
 
-					if(toc(t0) > nHours * 3600)
+					if(toc(t0) > TimeLimit)
 						fprintf('Times up, saving data...\n');
 						if(isempty(idx))
 							time{iCond} = [];
@@ -440,6 +442,10 @@ classdef Encoder < handle
 						save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
 						fprintf('Data saved!\n');
 						return;
+					
+					elseif(TimeLimit ~= Inf)
+						t_ = TimeLimit - toc(t0);
+						fprintf('Count down: %02d:%02d:%02d\n', floor(t_/3600), floor(mod(t_,3600)/60), mod(t_,60));
 					end
 				end
 				if(isempty(idx))
@@ -486,6 +492,7 @@ classdef Encoder < handle
 			if( ~exist('nHours', 'var') || isempty(nHours))
 				nHours = Inf;
 			end
+			TimeLimit = nHours * 3600;	% ms
 
 			t0 = tic;
 
@@ -637,7 +644,7 @@ classdef Encoder < handle
 						fprintf(' | t=%f\n', toc(t1));
 					end
 
-					if(toc(t0) > nHours * 3600)
+					if(toc(t0) >= TimeLimit)
 						fprintf('Times up, saving data...\n');
 						if(isempty(idx))
 							time{iCond} = [];
@@ -649,6 +656,9 @@ classdef Encoder < handle
 						save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
 						fprintf('Data saved!\n');
 						return;
+					elseif(TimeLimit ~= Inf)
+						t_ = TimeLimit - toc(t0);
+						fprintf('Count down: %02d:%02d:%02d\n', floor(t_/3600), floor(mod(t_,3600)/60), mod(t_,60));
 					end
 					
 				end
