@@ -276,7 +276,7 @@ classdef Encoder < handle
 			if( saveFolder(end) == '/' || saveFolder(end) == '\' )
 				saveFolder(end) = [];
 			end
-			if( ~exist('nHours') || isempty(nHours))
+			if( ~exist('nHours', 'var') || isempty(nHours))
 				nHours = Inf;
 			end
 			if( ~exist(fullfile(dataFolder,'Simulated Activities',sbj,saveFolder), 'dir') )
@@ -480,7 +480,7 @@ classdef Encoder < handle
 			if( saveFolder(end) == '/' || saveFolder(end) == '\' )
 				saveFolder(end) = [];
 			end
-			if( ~exist('nHours') || isempty(nHours))
+			if( ~exist('nHours', 'var') || isempty(nHours))
 				nHours = Inf;
 			end
 
