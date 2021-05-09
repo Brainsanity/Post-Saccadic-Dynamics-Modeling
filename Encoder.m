@@ -248,7 +248,7 @@ classdef Encoder < handle
 		end
 
 
-		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, stimulus, saveFolder)
+		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, stimulus, saveFolder, nHours)
 			%% Simulate activities of modeled cells at locations (0,0), (0,4), (0,8), (0,12)
 			%	idxConditions:		indices of conditions to run, by default run all 9 conditions
 			%   dataFolder:			folder containing experiment data and noise background
@@ -256,6 +256,7 @@ classdef Encoder < handle
 			%   contrast:			contrast of grating
 			%   stabilize:			'normal' (no stabilization), 'drift' (only stabilize drift), or 'full' (full stabilization)
 			%	stimulus:			'annulus' (annulus grating) or 'uniform' (uniform grating across the visual field)
+			%	nHours:				number of hours to run; Inf by default
 
 			if( ~exist('idxConditions', 'var') || isempty(idxConditions) )
 				idxConditions = 1:9;
@@ -275,9 +276,14 @@ classdef Encoder < handle
 			if( saveFolder(end) == '/' || saveFolder(end) == '\' )
 				saveFolder(end) = [];
 			end
+			if( ~exist('nHours') || isempty(nHours))
+				nHours = Inf;
+			end
 			if( ~exist(fullfile(dataFolder,'Simulated Activities',sbj,saveFolder), 'dir') )
 				mkdir( fullfile(dataFolder,'Simulated Activities',sbj,saveFolder) );
 			end
+
+			t0 = tic;
 
 			trials = EmpiricalBox.LoadSingleData(fullfile(dataFolder, 'Data', [sbj '.mat']));
 			nTrials = 100;
@@ -323,7 +329,13 @@ classdef Encoder < handle
 				sFR_c = sFR;	%sFR_c{iCond,iL} = sFR{iCond,iL};
 				sFR_s = sFR;	%sFR_s{iCond,iL} = sFR{iCond,iL};
 				LFR(iCond,:) = sFR;	%LFR{iCond,iL} = sFR{iCond,iL};
-				for( k = size(idx,2) : -1 : 1 )
+
+				kMax = size(idx,2);
+				if(exist(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'file'))
+					load(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ));
+					kMax = k - 1;
+				end
+				for( k = kMax : -1 : 1 )
 					% tic;
 					index = tMin + trials(idx(k)).(alignEvent) : min( size(trials(idx(k)).x.position,2), tMax + trials(idx(k)).(alignEvent) );
 					x  = trials(idx(k)).x.position(index) / 60;
@@ -401,7 +413,7 @@ classdef Encoder < handle
 
 					for( iL = 1:4 )
 						fprintf('iCond=%d, Ecc=%d, SF=%d, iTrials=%d/%d, iL=%d, ...', iCond, conditions(iCond).eccentricity, conditions(iCond).sf, k, size(idx,2), iL);
-						tic;
+						t1 = tic;
 						for( m = 1 : 3 )
 							xIdx = min(x(eyeIdx{m})) + min(obj.layers(iL).locations(idxExampleCells{iL,iEcc},1)) - 4 <= inputX & inputX <= max(x(eyeIdx{m})) + max(obj.layers(iL).locations(idxExampleCells{iL,iEcc},1)) + 4; %720 : 1460;
 		                    yIdx = min(y(eyeIdx{m})) + min(obj.layers(iL).locations(idxExampleCells{iL,iEcc},2)) - 4 <= inputY & inputY <= max(y(eyeIdx{m})) + max(obj.layers(iL).locations(idxExampleCells{iL,iEcc},2)) + 4; %300 : 780;
@@ -413,9 +425,19 @@ classdef Encoder < handle
 						else
 							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR_c{iL}(:,:,k), sFR_s{iL}(:,:,k) );
 						end
-						fprintf(' | t=%f\n', toc);
+						fprintf(' | t=%f\n', toc(t1));
 					end
-					
+
+					if(toc(t0) > nHours * 3600)
+						if(isempty(idx))
+							time{iCond} = [];
+						else
+							time{iCond} = (tMin:tMax) / trials(idx(1)).sRate * 1000;
+						end
+
+						lfr = LFR(iCond,:);
+						save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
+					end
 				end
 				if(isempty(idx))
 					time{iCond} = [];
@@ -424,7 +446,7 @@ classdef Encoder < handle
 				end
 
 				lfr = LFR(iCond,:);
-				save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
+				save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
 			end
             
             % save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
