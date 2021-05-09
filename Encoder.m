@@ -453,13 +453,14 @@ classdef Encoder < handle
 		end
 
 
-		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities_SacDB(obj, idxConditions, dataFolder, alignEvent, stabilize, saveFolder)
+		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities_SacDB(obj, idxConditions, dataFolder, alignEvent, stabilize, saveFolder, nHours)
 			%% Simulate activities of modeled cells at a series of eccentricities (0,0:2:14), given eye traces from the saccade database (SacDB)
 			%	idxConditions:		indices of conditions to run, by default run all 9 conditions
 			%   dataFolder:			folder containing experiment data and noise background
 			%	alignEvent:			'saccadeOn', 'saccadeOff', 'flashOn'
 			%   contrast:			contrast of grating
 			%   stabilize:			'normal' (no stabilization), 'drift' (only stabilize drift), or 'full' (full stabilization)
+			%	nHours:				number of hours to run; Inf by default
 
 			if( ~exist('idxConditions', 'var') || isempty(idxConditions) )
 				idxConditions = 1:9;
@@ -479,6 +480,11 @@ classdef Encoder < handle
 			if( saveFolder(end) == '/' || saveFolder(end) == '\' )
 				saveFolder(end) = [];
 			end
+			if( ~exist('nHours') || isempty(nHours))
+				nHours = Inf;
+			end
+
+			t0 = tic;
 
 			sbj = 'SacDB';
 			if( ~exist(fullfile(dataFolder,'Simulated Activities',sbj,saveFolder), 'dir') )
@@ -523,7 +529,13 @@ classdef Encoder < handle
 				sFR_c = sFR;
 				sFR_s = sFR;
 				LFR(iCond,:) = sFR;
-				for( k = size(idx,2) : -1 : 1 )
+
+				kMax = size(idx,2);
+				if(exist(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'file'))
+					load(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ));
+					kMax = k - 1;
+				end
+				for( k = kMax : -1 : 1 )
 					% tic;
 					index = tMin + trials(idx(k)).(alignEvent) : min( size(trials(idx(k)).x.position,2), tMax + trials(idx(k)).(alignEvent) );
 					x  = trials(idx(k)).x.position(index) / 60;
@@ -605,7 +617,7 @@ classdef Encoder < handle
 
 					for( iL = 1:4 )
 						fprintf('iCond=%d, Ecc=%d, SF=%d, iTrials=%d/%d, iL=%d, ...', iCond, conditions(iCond).eccentricity, conditions(iCond).sf, k, size(idx,2), iL);
-						tic;
+						t1 = tic;
 						for( m = 1 : 3 )
 							d = max([obj.layers(iL).sRFParams(idxExampleCells{iL,iEcc}).surroundRadii]) * 5;		% extra space beyond given cells
 							cellLocs = obj.layers(iL).locations(idxExampleCells{iL,iEcc}, :) - mean(obj.layers(iL).locations(idxExampleCells{iL,iEcc}, :), 1);	% bring the cells to the center
@@ -619,7 +631,18 @@ classdef Encoder < handle
 						else
 							LFR{iCond,iL}(:,:,k) = obj.TemporalModel.LinearResponse( obj.layers(iL).name, obj.layers(iL).tRFParams(idxExampleCells{iL,iEcc}), avContrast, trials(idx(k)).sRate, sFR_c{iL}(:,:,k), sFR_s{iL}(:,:,k) );
 						end
-						fprintf(' | t=%f\n', toc);
+						fprintf(' | t=%f\n', toc(t1));
+					end
+
+					if(toc(t0) > nHours * 3600)
+						if(isempty(idx))
+							time{iCond} = [];
+						else
+							time{iCond} = (tMin:tMax) / trials(idx(1)).sRate * 1000;
+						end
+
+						lfr = LFR(iCond,:);
+						save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
 					end
 					
 				end
@@ -630,7 +653,7 @@ classdef Encoder < handle
 				end
 
 				lfr = LFR(iCond,:);
-				save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells' );
+				save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
 			end
             
             % save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, [saveFolder, '.mat'] ), 'LFR', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', '-v7.3' );
