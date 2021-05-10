@@ -4,5 +4,6 @@
 hostname
 s=`expr hostname`
 echo $s
-module load matlab/r2020b
-matlab -nodesktop -nosplash -r "disp(2*$1); disp($s)"
+s=`expr $hostname`
+# module load matlab/r2020b
+# matlab -nodesktop -nosplash -r "disp(2*$1); disp($s)"
