@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH  -p standard --time=12:00:00 --cpus-per-task=22 --mem=72g
+#SBATCH --time=12:00:00 --cpus-per-task=22 --mem=72g -p interactive
 
 for iCond in $*
 do
