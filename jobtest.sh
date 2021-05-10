@@ -1,10 +1,8 @@
 #!/bin/bash
 #SBATCH -t 00:05:00
 
-s=$(echo `hostname`)
-echo "$(echo `hostname`)="$s
-s=$(hostname)
-echo "$(hostname)="$s
+# s=$(echo `hostname`)
+# s=$(hostname)
 
 hostname >> ../condition-$1.txt
 
