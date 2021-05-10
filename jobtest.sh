@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -o job_out_test.$1.txt -t 00:05:00
+#SBATCH -t 00:05:00
 
 s=$(echo `hostname`)
 echo "$(echo `hostname`)="$s
