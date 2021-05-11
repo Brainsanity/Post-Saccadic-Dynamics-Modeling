@@ -336,6 +336,7 @@ classdef Encoder < handle
 				if(exist(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'file'))
 					load(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ));
 					kMax = k - 1;
+					LFR(iCond,:) = lfr;
 				end
 				for( k = kMax : -1 : 1 )
 					% tic;
@@ -544,6 +545,7 @@ classdef Encoder < handle
 				if(exist(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'file'))
 					load(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ));
 					kMax = k - 1;
+					LFR(iCond,:) = lfr;
 				end
 				for( k = kMax : -1 : 1 )
 					% tic;
