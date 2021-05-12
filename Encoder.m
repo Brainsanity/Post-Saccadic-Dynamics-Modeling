@@ -657,8 +657,8 @@ classdef Encoder < handle
 						lfr = LFR(iCond,:);
 						save( fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ), 'sbj', 'iCond', 'lfr', 'time', 'conditions', 'trials', 'trialsIdx', 'idxExampleCells', 'idxAllCells', 'nExampleCells', 'nAllCells', 'k' );
 						fprintf('Data saved!\n');
-						t0 - tic;
-						
+						t0 = tic;
+
 						% return;
 					elseif(TimeLimit ~= Inf)
 						t_ = TimeLimit - toc(t0);
