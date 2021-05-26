@@ -77,7 +77,7 @@ classdef Decoder < handle
 				fprFun = @(dur) max(0, interp1(durs(:,1), fpr, dur, 'linear', 'extrap'));		% get false positive rate according to duration and eccentricity
 			end
 
-			nBoots = 4;
+			nBoots = 1000;
 			nTrials = size(obj.encoder.activityParams.trials,2);
 
 			conditions = obj.encoder.activityParams.conditions;
@@ -117,52 +117,46 @@ classdef Decoder < handle
 												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(4).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, [0 durMax], false, false));
 						end
 						for(iTick = 1 : size(tTicks,2))
-							if(iTick == 1), tic; end
+							tic;
 							fprintf('\tduration = %d...\n', tTicks(iTick));
-
-							Y0_ = frAbsent(:, 1 : tTicks(iTick)+1, :);
-							tw = ones(1, size(Y0_,2)) / size(Y0_,2);		% uniform temporal weights
-							Y0_ = tw * shiftdim(nanmean(Y0_, 1), 1);
-
-							Y1_ = lfrPresent(:, 1 : tTicks(iTick)+1, :);
-
 							c = zeros(1, nBoots);
 							for(iBoot = 1 : nBoots)
-							% for(k = 1 : 1000)
-							% 	parfor(iBoot = (k-1)*nBoots/1000+1 : k*nBoots/1000)
-									if(~mod(iBoot-1, round(nBoots/10)))
-										fprintf('\t\tiBoot = %d/%d...', iBoot, nBoots);
-									end
-									Y0 = Y0_(randi(nTrials, 1, nTrials));
-									db = prctile(Y0, 75);						% decision boundary at 25% false-alarm rate
-									
-									cb = [0 Inf];	% initial contrast boundaries
-									c(iBoot) = 0.5;		% initial contrast
-									extScale = 2;	% scale for extending over cb(2)
-									while(abs(diff(cb)) / c(iBoot) > 0.01)
-										Y1 = obj.encoder.AddInternalNoise(c(iBoot)*Y1_(:,:,randi(nTrials, 1, nTrials)));	% add non-linearity and internal noise
-										Y1 = tw * shiftdim(nanmean(Y1, 1), 1);
-										if(sum(Y1 < db) / size(Y1,2) < 0.25)		% miss rate should be 25%
-											% need to decrease the contrast
-											cb(2) = c(iBoot);
-											c(iBoot) = mean(cb);
+								if(~mod(iBoot-1, round(nBoots/10)))
+									fprintf('\t\tiBoot = %d/%d...', iBoot, nBoots);
+								end
+								Y0 = frAbsent(:, 1 : tTicks(iTick)+1, randi(nTrials, 1, nTrials));
+								tw = ones(1, size(Y0,2)) / size(Y0,2);		% uniform temporal weights
+								Y0 = tw * shiftdim(nanmean(Y0, 1), 1);
+								db = prctile(Y0, 75);						% decision boundary at 25% false-alarm rate
+								
+								Y1_ = lfrPresent(:, 1 : tTicks(iTick)+1, randi(nTrials, 1, nTrials));
+								
+								cb = [0 Inf];	% initial contrast boundaries
+								c(iBoot) = 0.5;		% initial contrast
+								extScale = 2;	% scale for extending over cb(2)
+								while(abs(diff(cb)) / c(iBoot) > 0.01)
+									Y1 = obj.encoder.AddInternalNoise(c(iBoot)*Y1_);	% add non-linearity and internal noise
+									Y1 = tw * shiftdim(nanmean(Y1, 1), 1);
+									if(sum(Y1 < db) / size(Y1,2) < 0.25)		% miss rate should be 25%
+										% need to decrease the contrast
+										cb(2) = c(iBoot);
+										c(iBoot) = mean(cb);
+									else
+										% need to increase the contrast
+										cb(1) = c(iBoot);
+										if(cb(2) == Inf)
+											c(iBoot) = c(iBoot) * extScale;
+											extScale = extScale * 2;
 										else
-											% need to increase the contrast
-											cb(1) = c(iBoot);
-											if(cb(2) == Inf)
-												c(iBoot) = c(iBoot) * extScale;
-												extScale = extScale * 2;
-											else
-												c(iBoot) = mean(cb);
-											end
+											c(iBoot) = mean(cb);
 										end
 									end
+								end
 
-									if(~mod(iBoot-1, round(nBoots/10)))
-										fprintf(' | t = %.6f\n', toc); tic;
-									end
-	                            % end
-	                        end
+								if(~mod(iBoot-1, round(nBoots/10)))
+									fprintf(' | t = %.6f\n', toc);
+								end
+                            end
                             
                             c(isoutlier(c)) = [];
 

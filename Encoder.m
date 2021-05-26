@@ -516,10 +516,10 @@ classdef Encoder < handle
 
 			Eccs = unique([conditions.eccentricity]);
 
-			stimulus = 'uniform';
-			if(strcmpi(stimulus, 'annulus'))
+			stimulusType = 'uniform';
+			if(strcmpi(stimulusType, 'annulus'))
 				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nan, [-pi pi]*0.02, dataFolder, Eccs, false);
-			elseif(strcmpi(stimulus, 'uniform'))
+			elseif(strcmpi(stimulusType, 'uniform'))
 				nCells = 500;
 				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nCells, nan, dataFolder, Eccs, false);
 			else
@@ -616,9 +616,9 @@ classdef Encoder < handle
 	                    stimulus = stimulus * 0.5;		% noise at a contrast of 0.5
 	                else
 	                	% full contrast grating
-	                	if(strcmpi(stimulus, 'annulus'))	% annulus grating
+	                	if(strcmpi(stimulusType, 'annulus'))	% annulus grating
 							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60, conditions(iCond).eccentricity, trials(idx(k)).gratingWidth );
-						elseif(strcmpi(stimulus, 'uniform'))	% uniform grating across the whole visual field
+						elseif(strcmpi(stimulusType, 'uniform'))	% uniform grating across the whole visual field
 							rndPhase = str2double(trials(mod(idx(k),end)+1).backgroundImage(find(trials(mod(idx(k),end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for phase
 							rndOri = str2double(trials(mod(idx(k)+1,end)+1).backgroundImage(find(trials(mod(idx(k)+1,end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for orientation
 							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, mod(rndPhase,100)/100*2*pi, trials(idx(k)).pixelAngle/60, -1, mod(rndOri,100)/100*360 );
@@ -686,9 +686,11 @@ classdef Encoder < handle
 				dataFolder = '../../Data/';
 			end
 
-			for(iCond = 9 : -1 : 1)
+			files = dir(fullfile(dataFolder, 'Simulated Activities', sbj, saveFolder, 'condition-*.mat'));
+
+			for(iCond = size(files,1) : -1 : 1)
 				fprintf('Processing %s-%02d.mat ...\n', saveFolder, iCond);
-				data = load(fullfile( dataFolder, 'Simulated Activities', sbj, saveFolder, sprintf('%s-%02d.mat', 'Condition', iCond) ));
+				data = load(fullfile(files(iCond).folder, files(iCond).name));
 				if(iCond ~= data.iCond)
 					warning('iCond not consistent!!!\n');
 				end
@@ -975,7 +977,7 @@ classdef Encoder < handle
 
 			SFs = unique([conditions.sf]);
 			SFs(SFs == 0) = [];
-			Eccs = unique([conditions.eccentricity]);
+			Eccs = [0 4 10];%unique([conditions.eccentricity]);
 
 			figure( 'NumberTitle', 'off', 'name', 'Mean FR of Example Cells', 'color', 'w' );
 			pause(0.1);
@@ -997,7 +999,7 @@ classdef Encoder < handle
 			        end
 			    end
 			    if(k == 1 || k == 6)
-			        ylabel({sprintf('%d cpd', k*2), 'Firing rate (spikes/s)'});
+			        ylabel({sprintf('%d cpd', SFs((k>1)+1)), 'Firing rate (spikes/s)'});
 			    end
 
 			    iSF = (k>5) + 1;
