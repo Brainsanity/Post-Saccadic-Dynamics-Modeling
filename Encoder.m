@@ -686,7 +686,7 @@ classdef Encoder < handle
 				dataFolder = '../../Data/';
 			end
 
-			files = dir(fullfile(dataFolder, 'Simulated Activities', sbj, saveFolder, 'condition-*.mat'));
+			files = dir(fullfile(dataFolder, 'Simulated Activities', sbj, saveFolder, 'Condition-*.mat'));
 
 			for(iCond = size(files,1) : -1 : 1)
 				fprintf('Processing %s-%02d.mat ...\n', saveFolder, iCond);
@@ -2861,7 +2861,7 @@ classdef Encoder < handle
 
 		%% Video Demo: eye movements affect cell responses
 		function DemoActivity(saveFolder)
-			
+
 			%%
 			figure('NumberTitle', 'off', 'name', 'Demo: P On cell Activity Map', 'color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
 
