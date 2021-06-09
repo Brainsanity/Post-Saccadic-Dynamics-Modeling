@@ -166,7 +166,7 @@ classdef Decoder < handle
 									if(~mod(iBoot-1, round(nBoots/10)))
 										fprintf(' | t = %.6f\n', toc); tic;
 									end
-	                            % end
+	                            end
 	                        end
                             
                             c(isoutlier(c)) = [];
