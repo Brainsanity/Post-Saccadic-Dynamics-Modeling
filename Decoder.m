@@ -21,9 +21,9 @@ classdef Decoder < handle
 			sbj = 'SacDB';
 			switch stabilize
 				case 'drift'
-					folder = 'UG - Noise & Grating Simulated Separately - drift';
+					folder = 'UG - Noise & Grating Simulated Separately - Drift Stabilized';
 				case 'saccade'
-					folder = 'UG - Noise & Grating Simulated Separately - saccade';
+					folder = 'UG - Noise & Grating Simulated Separately - Saccade Stabilized';
 				otherwise
 					folder = 'UG - Noise & Grating Simulated Separately';
 			end
