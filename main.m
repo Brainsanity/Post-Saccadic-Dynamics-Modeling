@@ -1,3 +1,4 @@
+
 %%
 % encoder = Encoder([], true);
 % encoder = Encoder([], false);   % H_s not 1

@@ -91,10 +91,11 @@ classdef Decoder < handle
 			tTicks = 0 : tStep : durMax;
 			durs = tTicks;
 
-			Thresholds = zeros(5, nSFs, nEccs, size(tTicks,2));
-			ThresholdsSTD = Thresholds;
-			Sensitivities = Thresholds;
-			SensitivitiesSTD = Thresholds;
+			load( fullfile(dataFolder, 'PerformanceData.mat') );
+			% Thresholds = zeros(5, nSFs, nEccs, size(tTicks,2));
+			% ThresholdsSTD = Thresholds;
+			% Sensitivities = Thresholds;
+			% SensitivitiesSTD = Thresholds;
 
 			cellNumAmplifier =cat(1, obj.encoder.layers.nAllCells) ./ cat(1,obj.encoder.layers.nExampleCells);		% inverse of proportion of cells used
 			cellNumAmplifier(5,:) = mean(cellNumAmplifier,1);
@@ -126,7 +127,11 @@ classdef Decoder < handle
 
 							Y1_ = lfrPresent(:, 1 : tTicks(iTick)+1, :);
 
-							c = zeros(1, nBoots);
+							if(iTick == 1)
+								c = ones(1, nBoots) * 0.5;	% initial contrast
+							else
+								c = ones(1, nBoots) * Thresholds(iL,iSF,iEcc,iTick-1);
+							end
 							for(iBoot = 1 : nBoots)
 							% for(k = 1 : 1000)
 							% 	parfor(iBoot = (k-1)*nBoots/1000+1 : k*nBoots/1000)
@@ -137,7 +142,7 @@ classdef Decoder < handle
 									db = prctile(Y0, 75);						% decision boundary at 25% false-alarm rate
 									
 									cb = [0 Inf];	% initial contrast boundaries
-									c(iBoot) = 0.5;		% initial contrast
+									% c(iBoot) = 0.5;		% initial contrast
 									extScale = 2;	% scale for extending over cb(2)
 									while(abs(diff(cb)) / c(iBoot) > 0.01)
 										Y1 = obj.encoder.AddInternalNoise(c(iBoot)*Y1_(:,:,randi(nTrials, 1, nTrials)));	% add non-linearity and internal noise

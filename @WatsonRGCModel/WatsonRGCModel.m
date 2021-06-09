@@ -418,6 +418,8 @@ classdef WatsonRGCModel
                             fprintf('cellType must be POn, POff, MOn, MOff!\n');
                     end
 
+                    ratio = ratio * ones(size(ecc));
+
                 otherwise
                     fprintf('cellType must be POn, POff, MOn, MOff!\n');
                     

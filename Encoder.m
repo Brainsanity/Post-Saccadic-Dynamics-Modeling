@@ -248,7 +248,7 @@ classdef Encoder < handle
 		end
 
 
-		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, stimulus, saveFolder, nHours)
+		function [LFR, time, conditions, trials, trialsIdx, idxExampleCells, idxAllCells, nExampleCells, nAllCells] = SimulateExampleCellsActivities(obj, idxConditions, dataFolder, sbj, alignEvent, stabilize, stimulusType, saveFolder, nHours)
 			%% Simulate activities of modeled cells at locations (0,0), (0,4), (0,8), (0,12)
 			%	idxConditions:		indices of conditions to run, by default run all 9 conditions
 			%   dataFolder:			folder containing experiment data and noise background
@@ -301,9 +301,9 @@ classdef Encoder < handle
 
 			Eccs = unique([conditions.eccentricity]);
 
-			if(strcmpi(stimulus, 'annulus'))
+			if(strcmpi(stimulusType, 'annulus'))
 				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nan, [-pi pi]*0.02, dataFolder, Eccs, false);
-			elseif(strcmpi(stimulus, 'uniform'))
+			elseif(strcmpi(stimulusType, 'uniform'))
 				nCells = 500;
 				[idxExampleCells, idxAllCells, nExampleCells, nAllCells] = obj.GetExampleCells(nCells, nan, dataFolder, Eccs, false);
 			else
@@ -403,9 +403,9 @@ classdef Encoder < handle
 	                    stimulus = stimulus * 0.5;		% noise at a contrast of 0.5
 	                else
 	                	% full contrast grating
-	                	if(strcmpi(stimulus, 'annulus'))	% annulus grating
+	                	if(strcmpi(stimulusType, 'annulus'))	% annulus grating
 							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, trials(idx(k)).phase, trials(idx(k)).pixelAngle/60, conditions(iCond).eccentricity, trials(idx(k)).gratingWidth );
-						elseif(strcmpi(stimulus, 'uniform'))	% uniform grating across the whole visual field
+						elseif(strcmpi(stimulusType, 'uniform'))	% uniform grating across the whole visual field
 							rndPhase = str2double(trials(mod(idx(k),end)+1).backgroundImage(find(trials(mod(idx(k),end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for phase
 							rndOri = str2double(trials(mod(idx(k)+1,end)+1).backgroundImage(find(trials(mod(idx(k)+1,end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after idx(k) as the random value for orientation
 							[stimulus, inputX, inputY] = obj.GenerateGrating( conditions(iCond).sf, mod(rndPhase,100)/100*2*pi, trials(idx(k)).pixelAngle/60, -1, mod(rndOri,100)/100*360 );
@@ -2856,6 +2856,150 @@ classdef Encoder < handle
 
 				close(writerObj);
 			end
+		end
+
+
+		%% Video Demo: eye movements affect cell responses
+		function DemoActivity(saveFolder)
+			
+			%%
+			figure('NumberTitle', 'off', 'name', 'Demo: P On cell Activity Map', 'color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
+
+			iL = 1;
+			ecc = 8;
+			iEcc = 5;	% ecc = 8
+			iCond = find([obj.activityParams.conditions.sf] == 2 & [obj.activityParams.conditions.eccentricity] == ecc);
+
+			cellXRange = [min(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 1)) - 0.2, max(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 1)) + 0.2];
+			cellYRange = [min(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 2)) - 0.2, max(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 2)) + 0.2];
+
+			trials = obj.activityParams.trials;
+			iTrial = 7;1;
+			nTrials = size(trials,2);
+			egTrial = trials(iTrial);
+			tTicks = -150:600;	% aligned to saccade off
+
+			% stimulus + cells
+			subplot(2,2,1);
+			[noise, inputX, inputY] = obj.LoadNoise( fullfile('../../data', egTrial.backgroundImage), egTrial.pixelAngle/60 );
+			rndPhase = str2double(trials(mod(iTrial,end)+1).backgroundImage(find(trials(mod(iTrial,end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial iTrial as the random value for phase
+			rndOri =   str2double(trials(mod(iTrial+1,end)+1).backgroundImage(find(trials(mod(iTrial+1,end)+1).backgroundImage == '_')+1 : end-4));	% use the backgroundImage index of the trial after iTrial as the random value for orientation
+			grating = obj.GenerateGrating( 2, mod(rndPhase,100)/100*2*pi, egTrial.pixelAngle/60, -1, mod(rndOri,100)/100*360 );
+			% grating = obj.GenerateGrating( 1.5, 0, 1/60, -1, 45 );
+			stimulus = (noise + grating) / 4 + 0.5;
+			imshow( stimulus, 'XData', inputX([1 end]), 'YData', inputY([1 end]) ); hold on;
+
+			iTick = 1;%:size(tTicks,2)
+			eyeX = egTrial.x.position(egTrial.saccadeOff + round(tTicks(iTick)/1000*egTrial.sRate))/60;
+			eyeY = egTrial.y.position(egTrial.saccadeOff + round(tTicks(iTick)/1000*egTrial.sRate))/60;
+			MarkerSize = norm(diff(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(1:2), :),1)) * 138;
+			hCells = plot( obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 1) + eyeX, obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 2) + eyeY, '.', 'MarkerSize', MarkerSize, 'color', 'r' );
+			set(gca, 'visible', 'on', 'XLim', [-1.5 8.5], 'YLim', [-2.5 2.5], 'YTick', -2:2, 'ydir', 'normal', 'FontSize', 16, 'LineWidth', 2, 'XColor', 'k', 'YColor', 'k');
+			xlabel('Horizontal position (\circ)');
+			ylabel('Vertical position (\circ)');
+			title('Cell Receptive Fields over Stimulus');
+
+
+			% eye trace
+			subplot(2,2,3); hold on; h = [];
+			h(1) = plot(tTicks, egTrial.x.position(egTrial.saccadeOff + round(tTicks/1000*egTrial.sRate)), 'LineWidth', 2, 'displayname', 'Horizontal');
+			h(2) = plot(tTicks, egTrial.y.position(egTrial.saccadeOff + round(tTicks/1000*egTrial.sRate)), 'LineWidth', 2, 'displayname', 'Vertical');
+			hTime = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
+			xlabel('Time from saccade off (ms)');
+			ylabel('Eye position (arcmin)');
+			title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
+			legend(h, 'location', 'east');
+			set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
+
+
+			% cell input
+			subplot(2,2,2); hold on;
+			inputX2 = linspace(0, 9, 1920*3);
+			inputY2 = linspace(-1.5, 1.5, round(3/9*1920*3));
+			[xq, yq] = meshgrid(inputX2, inputY2);
+			stimulus2 = interp2(inputX, inputY, stimulus, xq, yq, 'linear');
+			r = mean( [obj.layers(iL).sRFParams(obj.layers(iL).idxExampleCells{iEcc}).centerRadii] ) / 2.2;
+			idx = cellXRange(1) + eyeX <= inputX2 & inputX2 <= cellXRange(2) + eyeX;
+			idy = cellYRange(1) + eyeY <= inputY2 & inputY2 <= cellYRange(2) + eyeY;
+			mask = zeros(sum(idy), sum(idx));
+			for( iCell = 1 : length(obj.layers(iL).idxExampleCells{iEcc}) )
+				d = sqrt((obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(iCell), 1) + eyeX - inputX2(idx)).^2 + (obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(iCell), 2) + eyeY - inputY2(idy)').^2);
+				mask(d <= r) = 1;
+				mask(d > r) = mask(d > r) + exp(-(d(d > r)-r).^2/(2*(r/20)^2));
+			end
+			hCellInput = imshow( stimulus2(idy,idx) .* mask, 'XData', inputX2(idx), 'YData', inputY2(idy) ); hold on;
+			% xlabel('Horizontal position (\circ)');
+			% ylabel('Vertical position (\circ)');
+			title('Input Received by Cells');
+			set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange + eyeY, 'xtick', [], 'ytick', [], 'ydir', 'normal', 'fontsize', 16, 'LineWidth', 2, 'XColor', 'k', 'YColor', 'k', 'visible', 'on');
+
+
+			% cell response
+			subplot(2,2,4); hold on; clear hFR;
+			fr2 = obj.ExampleCellsActivitiesOnCondition(obj.layers(iL).name, ecc, 2, 0.5, 'saccadeOff', tTicks([1 end]), false, true);
+			fr = fr2(~isnan(fr2(:)));
+			frMax = std(fr)*5;
+			colormap(gca, 'hot');
+			colors = colormap(gca);
+			for( iCell = length(obj.layers(iL).idxExampleCells{iEcc}) : -1 : 1 )
+				hFR(iCell) = fill( r*cosd(0:10:360) + obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(iCell), 1) + eyeX, r*sind(0:10:360) + obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(iCell), 2) + eyeY,...
+								   'k', 'FaceColor', colors(round(fr2(iCell, iTick, iTrial) / frMax * 255) + 1, :), 'FaceAlpha', 1, 'LineStyle', 'none' );
+			end
+			% xlabel('Horizontal position (\circ)');
+			% ylabel('Vertical position (\circ)');
+			title('Normalized Cell Response');
+			axis equal;
+			set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange + eyeY, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
+			colorbar;
+
+
+
+			%% generate movie
+			% saveFolder = 'F:/Post Saccadic Dynamics Modeling/Data/Simulated Activities/SacDB/UG - Noise & Grating Simulated Separately';
+			filename = fullfile(saveFolder, sprintf('Demo_Activity - SF=%d - iTrial=%d', 2, iTrial));
+			writerObj = VideoWriter(filename, 'MPEG-4');
+			open(writerObj);
+			for(iTick = 1 : size(tTicks,2))
+				eyeX = egTrial.x.position(egTrial.saccadeOff + round(tTicks(iTick)/1000*egTrial.sRate))/60;
+				eyeY = egTrial.y.position(egTrial.saccadeOff + round(tTicks(iTick)/1000*egTrial.sRate))/60;
+
+				% stimulus2 + cells
+				hCells.XData = obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 1) + eyeX;
+				hCells.YData = obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 2) + eyeY;
+
+				% eye trace
+				hTime.XData = [1 1] * tTicks(iTick);
+				subplot(2,2,3);
+				title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
+
+				% cell input
+				idx = cellXRange(1) + eyeX <= inputX2 & inputX2 <= cellXRange(2) + eyeX;
+				idy = cellYRange(1) + eyeY <= inputY2 & inputY2 <= cellYRange(2) + eyeY;
+				mask = zeros(sum(idy), sum(idx));
+				for( iCell = 1 : length(obj.layers(iL).idxExampleCells{iEcc}) )
+					d = sqrt((obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(iCell), 1) + eyeX - inputX2(idx)).^2 + (obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}(iCell), 2) + eyeY - inputY2(idy)').^2);
+					mask(d <= r) = 1;
+			        ii = d > r & d < r*1.5;
+					mask(ii) = mask(ii) + exp(-(d(ii)-r).^2/(2*(r/20)^2));
+				end
+				hCellInput.CData = stimulus2(idy,idx) .* mask;
+				hCellInput.XData = inputX2(idx);
+				hCellInput.YData = inputY2(idy);
+			    subplot(2,2,2);
+				xlim(cellXRange + eyeX);
+				ylim(cellYRange + eyeY);
+
+				% cell response
+				for(iCell = 1 : length(obj.layers(iL).idxExampleCells{iEcc}))
+					hFR(iCell).FaceColor = colors(min(256, round(fr2(iCell, iTick, iTrial) / frMax * 255) + 1), :);
+				end
+
+				drawnow;
+				writeVideo(writerObj, getframe(gcf));
+				% pause;
+			end
+
+			close(writerObj);
 		end
 		
 	end
