@@ -91,11 +91,11 @@ classdef Decoder < handle
 			tTicks = 0 : tStep : durMax;
 			durs = tTicks;
 
-			load( fullfile(dataFolder, 'PerformanceData.mat') );
-			% Thresholds = zeros(5, nSFs, nEccs, size(tTicks,2));
-			% ThresholdsSTD = Thresholds;
-			% Sensitivities = Thresholds;
-			% SensitivitiesSTD = Thresholds;
+			% load( fullfile(dataFolder, 'PerformanceData.mat') );
+			Thresholds = zeros(5, nSFs, nEccs, size(tTicks,2));
+			ThresholdsSTD = Thresholds;
+			Sensitivities = Thresholds;
+			SensitivitiesSTD = Thresholds;
 
 			cellNumAmplifier =cat(1, obj.encoder.layers.nAllCells) ./ cat(1,obj.encoder.layers.nExampleCells);		% inverse of proportion of cells used
 			cellNumAmplifier(5,:) = mean(cellNumAmplifier,1);
