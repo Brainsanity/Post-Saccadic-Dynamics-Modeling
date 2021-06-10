@@ -77,7 +77,7 @@ classdef Decoder < handle
 				fprFun = @(dur) max(0, interp1(durs(:,1), fpr, dur, 'linear', 'extrap'));		% get false positive rate according to duration and eccentricity
 			end
 
-			nBoots = 1000;
+			nBoots = 100;
 			nTrials = size(obj.encoder.activityParams.trials,2);
 
 			conditions = obj.encoder.activityParams.conditions;
@@ -133,8 +133,9 @@ classdef Decoder < handle
 								c = ones(1, nBoots) * Thresholds(iL,iSF,iEcc,iTick-1);
 							end
 							% for(iBoot = 1 : nBoots)
-							for(k = 1 : 5)
-								parfor(iBoot = int32((k-1)*nBoots/1000+1 : k*nBoots/1000))
+							nWorkers = 20;
+							for(k = 1 : nBoots/nWorkers)
+								parfor(iBoot = int32((k-1)*nWorkers+1 : k*nWorkers))
 									if(~mod(iBoot-1, round(nBoots/10)))
 										fprintf('\t\tiBoot = %d/%d...', iBoot, nBoots);
 									end
