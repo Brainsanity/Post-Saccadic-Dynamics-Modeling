@@ -77,7 +77,7 @@ classdef Decoder < handle
 				fprFun = @(dur) max(0, interp1(durs(:,1), fpr, dur, 'linear', 'extrap'));		% get false positive rate according to duration and eccentricity
 			end
 
-			nBoots = 50;
+			nBoots = 1000;
 			nTrials = size(obj.encoder.activityParams.trials,2);
 
 			conditions = obj.encoder.activityParams.conditions;
@@ -178,6 +178,9 @@ classdef Decoder < handle
 						end
 					end
 				end
+				fprintf('Saving data...\n');
+				save( fullfile(dataFolder, 'PerformanceData.mat'), 'tTicks', 'conditions', 'durs', 'Thresholds', 'ThresholdsSTD', 'Sensitivities', 'SensitivitiesSTD' );
+				fprintf('Data saved!\n');
 			end
 				
 			save( fullfile(dataFolder, 'PerformanceData.mat'), 'tTicks', 'conditions', 'durs', 'Thresholds', 'ThresholdsSTD', 'Sensitivities', 'SensitivitiesSTD' );
