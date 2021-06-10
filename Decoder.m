@@ -133,7 +133,7 @@ classdef Decoder < handle
 								c = ones(1, nBoots) * Thresholds(iL,iSF,iEcc,iTick-1);
 							end
 							% for(iBoot = 1 : nBoots)
-							nWorkers = 20;
+							nWorkers = 10;
 							for(k = 1 : nBoots/nWorkers)
 								parfor(iBoot = int32((k-1)*nWorkers+1 : k*nWorkers))
 									if(~mod(iBoot-1, round(nBoots/10)))
