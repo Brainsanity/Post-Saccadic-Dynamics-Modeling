@@ -134,7 +134,7 @@ classdef Decoder < handle
 							end
 							% for(iBoot = 1 : nBoots)
 							for(k = 1 : 5)
-								parfor(iBoot = (k-1)*nBoots/1000+1 : k*nBoots/1000)
+								parfor(iBoot = int32((k-1)*nBoots/1000+1 : k*nBoots/1000))
 									if(~mod(iBoot-1, round(nBoots/10)))
 										fprintf('\t\tiBoot = %d/%d...', iBoot, nBoots);
 									end
