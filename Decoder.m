@@ -132,10 +132,10 @@ classdef Decoder < handle
 							else
 								c = ones(1, nBoots) * Thresholds(iL,iSF,iEcc,iTick-1);
 							end
-							% for(iBoot = 1 : nBoots)
-							nWorkers = 10;
-							for(k = 1 : nBoots/nWorkers)
-								parfor(iBoot = int32((k-1)*nWorkers+1 : k*nWorkers))
+							for(iBoot = 1 : nBoots)
+							% nWorkers = 10;
+							% for(k = 1 : nBoots/nWorkers)
+							% 	parfor(iBoot = int32((k-1)*nWorkers+1 : k*nWorkers))
 									if(~mod(iBoot-1, round(nBoots/10)))
 										fprintf('\t\tiBoot = %d/%d...', iBoot, nBoots);
 									end
@@ -167,7 +167,7 @@ classdef Decoder < handle
 									if(~mod(iBoot-1, round(nBoots/10)))
 										fprintf(' | t = %.6f\n', toc); tic;
 									end
-	                            end
+	                            % end
 	                        end
                             
                             c(isoutlier(c)) = [];
