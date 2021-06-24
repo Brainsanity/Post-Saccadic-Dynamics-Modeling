@@ -185,6 +185,7 @@ fr = {fr2, frBG, fr10};
 % fr = fr10(~isnan(fr10(:))); frMax10 = std(fr)*5;
 % frMax = [frMax2, frMaxBG, frMax10];
 frMax = [max(max(mean(fr2(:,:,iTrial),3),[],1)), max(max(mean(frBG(:,:,iTrial),3),[],1)), max(max(mean(fr10(:,:,iTrial),3),[],1))];
+frMax(:) = max(frMax);
 names = {'2 cpd', 'Absent', '10 cpd'};
 clear hFR;
 for(k = 1 : 3)
@@ -201,11 +202,11 @@ for(k = 1 : 3)
 	% xlabel('Horizontal position (\circ)');
 	% ylabel('Vertical position (\circ)');
 	% title(['Normalized Cell Response | ', names{k}]);
-	if(k == 1)
-		ylabel('Normalized Cell Response');
-	end
+	% if(k == 1)
+	% 	ylabel('Normalized Cell Response');
+	% end
 	axis equal;
-	set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
+	set(gca, 'position', [0.4169+(k-2)*0.2691, 0.6553 0.1661 0.3804] 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
 	colorbar;
 end
 % axes('position', [0 0 1 1], 'visible', 'off');
@@ -222,9 +223,9 @@ for(k = 1:3)
 end
 hTime1 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 legend(h, 'location', 'northeast');
-ylabel('Firing rate (s^{-1}');
+ylabel('Firing rate (s^{-1})');
 title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
-set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'lineWidth', 2, 'fontsize', 16, 'XColor', 'k', 'YColor', 'k');
+set(gca, 'position', [0.1300 0.3282 0.7750 0.2157], 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'XTickLabel', [], 'lineWidth', 2, 'fontsize', 16, 'XColor', 'k', 'YColor', 'k');
 
 % eye trace
 subplot(3, 1, 3); hold on; h = [];
@@ -234,7 +235,7 @@ hTime2 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 xlabel('Time from saccade off (ms)');
 ylabel('Eye position (arcmin)');
 legend(h, 'location', 'east');
-set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
+set(gca, 'position', [0.1300 0.0734 0.7750 0.2157], 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
 
 
 % generate movie
