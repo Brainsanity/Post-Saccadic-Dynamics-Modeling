@@ -222,6 +222,7 @@ for(k = 1:3)
 	h(k) = plot(tTicks, m, '-', 'color', colors2{k}, 'lineWidth', 2, 'displayname', names{k});
 end
 hTime1 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
+plot([0 0], ylim, '-', 'color', [0.5 0.5 0.5], 'lineWidth', 2);
 legend(h, 'location', 'northeast');
 ylabel('Firing rate (s^{-1})');
 hTitle = title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
@@ -232,6 +233,7 @@ axes('position', [0.1300 0.0734 0.7750 0.2157], 'nextplot', 'add'); h = [];
 h(1) = plot(tTicks, egTrial.x.position(egTrial.saccadeOff + round(tTicks/1000*egTrial.sRate)), 'LineWidth', 2, 'displayname', 'Horizontal');
 h(2) = plot(tTicks, egTrial.y.position(egTrial.saccadeOff + round(tTicks/1000*egTrial.sRate)), 'LineWidth', 2, 'displayname', 'Vertical');
 hTime2 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
+plot([0 0], ylim, '-', 'color', [0.5 0.5 0.5], 'lineWidth', 2);
 xlabel('Time from saccade off (ms)');
 ylabel('Eye position (arcmin)');
 legend(h, 'location', 'east');
