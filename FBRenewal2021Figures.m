@@ -207,7 +207,7 @@ for(k = 1 : 3)
 	% end
 	axis equal;
 	set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
-	set(gca, 'position', [0.4169+(k-2)*0.2691, 0.6553 0.1661 0.3804]);
+	set(gca, 'position', [0.4169+(k-2)*0.2691, 0.6055 0.1661 0.3804]);
 	colorbar;
 end
 % axes('position', [0 0 1 1], 'visible', 'off');
@@ -258,7 +258,7 @@ for(iTick = 1 : size(tTicks,2))
 	hTitle.String = sprintf('Eye Trace | t = %d ms', tTicks(iTick));
 	drawnow;
 	writeVideo(writerObj, getframe(gcf));
-	pause;
+	% pause;
 end
 
 close(writerObj);
