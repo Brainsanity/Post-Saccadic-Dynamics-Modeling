@@ -40,7 +40,7 @@ classdef Decoder < handle
 				alignEvent = 'saccadeOff';
 			end
 			if( ~exist('durMax', 'var') || isempty(durMax) )
-				durMax = 600;
+				durMax = 600 - 50;
 			end
 			if( ~exist('tStep', 'var') || isempty(tStep) )
 				tStep = 10;
@@ -77,7 +77,7 @@ classdef Decoder < handle
 				fprFun = @(dur) max(0, interp1(durs(:,1), fpr, dur, 'linear', 'extrap'));		% get false positive rate according to duration and eccentricity
 			end
 
-			nBoots = 100;
+			nBoots = 4;10;
 			nTrials = size(obj.encoder.activityParams.trials,2);
 
 			conditions = obj.encoder.activityParams.conditions;
@@ -91,6 +91,11 @@ classdef Decoder < handle
 			tTicks = 0 : tStep : durMax;
 			durs = tTicks;
 
+			for(iL = 1:4)
+				tRF = obj.encoder.TemporalModel.LinearResponse(obj.encoder.layers(iL).name, obj.encoder.layers(iL).tRFParams(1), 0.5, 1000, [1 zeros(1,299)], -[1 zeros(1,299)]);
+				rfDelays(iL) = find(tRF > max(tRF)*0.01, 1, 'first');
+			end
+
 			% load( fullfile(dataFolder, 'PerformanceData.mat') );
 			Thresholds = zeros(5, nSFs, nEccs, size(tTicks,2));
 			ThresholdsSTD = Thresholds;
@@ -100,22 +105,22 @@ classdef Decoder < handle
 			cellNumAmplifier =cat(1, obj.encoder.layers.nAllCells) ./ cat(1,obj.encoder.layers.nExampleCells);		% inverse of proportion of cells used
 			cellNumAmplifier(5,:) = mean(cellNumAmplifier,1);
 
-			for(iL = 1 : 5)
+			for(iL = 5)%1 : 5)
 				for(iSF = 1 : nSFs)
 					for(iEcc = 1 : nEccs)
 						fprintf('iL = %d, SF = %d, Ecc = %d...\n', iL, SFs(iSF), Eccs(iEcc));
 						if(iL ~= 5)
-							frAbsent = obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(iL).name, Eccs(iEcc), 0, 0, alignEvent, [0 durMax], false, withInternalNoise);
-							lfrPresent = obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(iL).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, [0 durMax], false, false);
+							frAbsent = obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(iL).name, Eccs(iEcc), 0, 0, alignEvent, rfDelays(iL) + [0 durMax], false, withInternalNoise);
+							lfrPresent = obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(iL).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, rfDelays(iL) + [0 durMax], false, false);
 						else
-							frAbsent = cat(1, obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(1).name, Eccs(iEcc), 0, 0, alignEvent, [0 durMax], false, withInternalNoise),...
-											  obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(2).name, Eccs(iEcc), 0, 0, alignEvent, [0 durMax], false, withInternalNoise),...
-											  obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(3).name, Eccs(iEcc), 0, 0, alignEvent, [0 durMax], false, withInternalNoise),...
-											  obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(4).name, Eccs(iEcc), 0, 0, alignEvent, [0 durMax], false, withInternalNoise));
-							lfrPresent = cat(1, obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(1).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, [0 durMax], false, false),...
-												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(2).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, [0 durMax], false, false),...
-												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(3).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, [0 durMax], false, false),...
-												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(4).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, [0 durMax], false, false));
+							frAbsent = cat(1, obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(1).name, Eccs(iEcc), 0, 0, alignEvent, rfDelays(1) + [0 durMax], false, withInternalNoise),...
+											  obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(2).name, Eccs(iEcc), 0, 0, alignEvent, rfDelays(2) + [0 durMax], false, withInternalNoise),...
+											  obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(3).name, Eccs(iEcc), 0, 0, alignEvent, rfDelays(3) + [0 durMax], false, withInternalNoise),...
+											  obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(4).name, Eccs(iEcc), 0, 0, alignEvent, rfDelays(4) + [0 durMax], false, withInternalNoise));
+							lfrPresent = cat(1, obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(1).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, rfDelays(1) + [0 durMax], false, false),...
+												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(2).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, rfDelays(2) + [0 durMax], false, false),...
+												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(3).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, rfDelays(3) + [0 durMax], false, false),...
+												obj.encoder.ExampleCellsActivitiesOnCondition(obj.encoder.layers(4).name, Eccs(iEcc), SFs(iSF), 1.0, alignEvent, rfDelays(4) + [0 durMax], false, false));
 						end
 						for(iTick = 1 : size(tTicks,2))
 							if(iTick == 1), tic; end
