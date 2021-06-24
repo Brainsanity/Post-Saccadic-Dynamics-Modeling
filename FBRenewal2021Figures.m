@@ -213,12 +213,12 @@ end
 
 % cell responses as a function of time
 subplot(3,1,2); hold on; h = [];
-colors = {[0.0745    0.6235    1.0000], 'k', [1.0000    0.4118    0.1608]};
+colors2 = {[0.0745    0.6235    1.0000], 'k', [1.0000    0.4118    0.1608]};
 for(k = 1:3)
 	m = mean(fr{k}(:,:,iTrial), 1);
 	sem = std(fr{k}(:,:,iTrial), [], 1) / sqrt(size(fr{k}, 1));
-	fill([tTicks, fliplr(tTicks)], [m-sem, fliplr(m+sem)], 'k', 'FaceColor', colors{k}, 'LineStyle', 'none', 'FaceAlpha', 0.5 );
-	h(k) = plot(tTicks, m, '-', 'color', colors{k}, 'lineWidth', 2, 'displayname', names{k});
+	fill([tTicks, fliplr(tTicks)], [m-sem, fliplr(m+sem)], 'k', 'FaceColor', colors2{k}, 'LineStyle', 'none', 'FaceAlpha', 0.5 );
+	h(k) = plot(tTicks, m, '-', 'color', colors2{k}, 'lineWidth', 2, 'displayname', names{k});
 end
 hTime1 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 legend(h, 'location', 'northeast');
