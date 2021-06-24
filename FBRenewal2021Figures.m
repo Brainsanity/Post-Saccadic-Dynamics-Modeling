@@ -206,8 +206,7 @@ for(k = 1 : 3)
 	% 	ylabel('Normalized Cell Response');
 	% end
 	axis equal;
-	set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
-	set(gca, 'position', [0.4169+(k-2)*0.2691, 0.6055 0.1661 0.3804]);
+	set(gca, 'position', [0.4169+(k-2)*0.2691, 0.6055 0.1661 0.3804], 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
 	colorbar;
 end
 % axes('position', [0 0 1 1], 'visible', 'off');
