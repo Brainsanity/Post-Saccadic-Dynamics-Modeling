@@ -77,7 +77,7 @@ classdef Decoder < handle
 				fprFun = @(dur) max(0, interp1(durs(:,1), fpr, dur, 'linear', 'extrap'));		% get false positive rate according to duration and eccentricity
 			end
 
-			nBoots = 4;10;
+			nBoots = 10;
 			nTrials = size(obj.encoder.activityParams.trials,2);
 
 			conditions = obj.encoder.activityParams.conditions;
@@ -105,7 +105,7 @@ classdef Decoder < handle
 			cellNumAmplifier =cat(1, obj.encoder.layers.nAllCells) ./ cat(1,obj.encoder.layers.nExampleCells);		% inverse of proportion of cells used
 			cellNumAmplifier(5,:) = mean(cellNumAmplifier,1);
 
-			for(iL = 5)%1 : 5)
+			for(iL = 1 : 5)
 				for(iSF = 1 : nSFs)
 					for(iEcc = 1 : nEccs)
 						fprintf('iL = %d, SF = %d, Ecc = %d...\n', iL, SFs(iSF), Eccs(iEcc));
@@ -126,11 +126,19 @@ classdef Decoder < handle
 							if(iTick == 1), tic; end
 							fprintf('\tduration = %d...\n', tTicks(iTick));
 
-							Y0_ = frAbsent(:, 1 : tTicks(iTick)+1, :);
+							if(tTicks(iTick) == 0)		% 0 duration
+								Thresholds(:,:,:,iTick) = Inf;
+								ThresholdsSTD(:,:,:,iTick) = Inf;
+								Sensitivities(:,:,:,iTick) = eps;
+								SensitivitiesSTD(:,:,:,iTick) = eps;
+								continue;
+							end
+
+							Y0_ = frAbsent(:, 1 : tTicks(iTick), :);
 							tw = ones(1, size(Y0_,2)) / size(Y0_,2);		% uniform temporal weights
 							Y0_ = tw * shiftdim(nanmean(Y0_, 1), 1);
 
-							Y1_ = lfrPresent(:, 1 : tTicks(iTick)+1, :);
+							Y1_ = lfrPresent(:, 1 : tTicks(iTick), :);
 
 							if(iTick == 1)
 								c = ones(1, nBoots) * 0.5;	% initial contrast

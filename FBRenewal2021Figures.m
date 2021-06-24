@@ -6,7 +6,12 @@ sen2SD = shiftdim(SensitivitiesSTD(iL,1,:,:), 2)';
 sen10 = shiftdim(Sensitivities(iL,2,:,:), 2)';
 sen10SD = shiftdim(SensitivitiesSTD(iL,2,:,:), 2)';
 
-durs = durs - 57;
+durs = durs+1; - 7;57;
+durs = [0 durs];
+sen2 = [ones(1,size(sen2,2))*eps; sen2];
+sen2SD = [ones(1,size(sen2SD,2))*eps; sen2SD];
+sen10 = [ones(1,size(sen10,2))*eps; sen10];
+sen10SD = [ones(1,size(sen10SD,2))*eps; sen10SD];
 
 figure('color', 'w');
 colors = {'r', 'g', 'b', [1 0.5 0.5], [0.5 1 0.5], [0.5 0.5 1], [0.5 0 0], [0 0.5 0], [0 0 0.5]};
@@ -108,6 +113,7 @@ title('10 cpd');
 
 
 %% results for ecc=0,4,8 and t=50,150,500, un-normalized, used to compare with empirical results
+durs = durs - 7;	% compensate the difference btween online & offline saccade detection 
 figure('color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
 colors = {'r', [1 0.5 0.5], 'g', [0.5 1 0.5], 'b', [0.5 0.5 1], [0.5 0 0], [0 0.5 0], [0 0 0.5]};
 tIdx = abs(durs-50) < 5 | abs(durs-500) < 5;
@@ -148,7 +154,7 @@ for(k = [1 3 5])
 end
 ylabel('Sensitivity');
 xlabel('Time from saccade off (ms)');
-
+durs = durs + 7;
 
 
 %% Video showing P On cell activities averaged across trials / example trial
@@ -169,7 +175,7 @@ cellXRange = [1.1  -0.1; -0.1 1.1] * cellXRange';
 cellYRange = [1.1  -0.1; -0.1 1.1] * cellYRange';
 
 trials = encoder.activityParams.trials;
-iTrial = 7;1;
+iTrial = 47;1;
 nTrials = size(trials,2);
 egTrial = trials(iTrial);
 tTicks = -150:600;	% aligned to saccade off
@@ -189,7 +195,7 @@ frMax(:) = max(frMax);
 names = {'2 cpd', 'Absent', '10 cpd'};
 clear hFR;
 for(k = 1 : 3)
-	axes('position', [0.4169+(k-2)*0.2691, 0.6055 0.1661 0.3804], 'nextplot', 'add');
+	axes('position', [0.4169+(k-2)*0.2691, 0.5346 0.1661 0.3804], 'nextplot', 'add');
 	colormap(gca, 'hot');
 	colors = colormap(gca);
 	iTick = 1;
@@ -213,7 +219,7 @@ end
 % hTxt = text(0.5, 0.95, sprintf('Time from Saccade Offset: %d ms', tTicks(iTick)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 24);
 
 % cell responses as a function of time
-axes('position', [0.1300 0.3282 0.7750 0.2157], 'nextplot', 'add'); h = [];
+axes('position', [0.1300 0.3169 0.7750 0.2157], 'nextplot', 'add'); h = [];
 colors2 = {[0.0745    0.6235    1.0000], 'k', [1.0000    0.4118    0.1608]};
 for(k = 1:3)
 	m = mean(fr{k}(:,:,iTrial), 1);
@@ -242,8 +248,8 @@ set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'Font
 
 % generate movie
 saveFolder = '../../Manuscript/FB Renewal 2021';
-filename = fullfile(saveFolder, sprintf('Demo_Activity - SF=%d - iTrial=%d', 2, iTrial));
-writerObj = VideoWriter(filename);%, 'MPEG-4');
+filename = fullfile(saveFolder, sprintf('Demo_Activity - - P On Cells - Fovea - iTrial=%d', iTrial));
+writerObj = VideoWriter(filename, 'MPEG-4');
 open(writerObj);
 for(iTick = 1 : size(tTicks,2))
 
@@ -263,6 +269,21 @@ for(iTick = 1 : size(tTicks,2))
 end
 
 close(writerObj);
+
+
+%% example stimuli
+figure('NumberTitle', 'off', 'name', 'Example Stimuli', 'color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
+[noise, inputX, inputY] = encoder.LoadNoise( fullfile('../../Data', 'noise/noise_1.bin'), 1/60 );
+grating2 = encoder.GenerateGrating( 2, 0, 1/60, -1, 45 );	% uniform grating across visual field
+grating10 = encoder.GenerateGrating( 10, 0, 1/60, -1, 45 );	% uniform grating across visual field
+xIdx = 850:1050;
+yIdx = 565:635;
+subplot(1,3,1);
+imshow((1.2*noise(yIdx,xIdx) + 0.8*grating2(yIdx,xIdx)) * 0.25 + 0.5);
+subplot(1,3,2);
+imshow(1.2*noise(yIdx,xIdx) * 0.25 + 0.5);
+subplot(1,3,3);
+imshow((1.2*noise(yIdx,xIdx) + 0.8*grating10(yIdx,xIdx)) * 0.25 + 0.5);
 
 
 
