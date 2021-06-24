@@ -200,13 +200,16 @@ for(k = 1 : 3)
 	end
 	% xlabel('Horizontal position (\circ)');
 	% ylabel('Vertical position (\circ)');
-	title(['Normalized Cell Response | ', names{k}]);
+	% title(['Normalized Cell Response | ', names{k}]);
+	if(k == 1)
+		ylabel('Normalized Cell Response');
+	end
 	axis equal;
 	set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
 	colorbar;
 end
-axes('position', [0 0 1 1], 'visible', 'off');
-hTxt = text(0.5, 0.95, sprintf('Time from Saccade Offset: %d ms', tTicks(iTick)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 24);
+% axes('position', [0 0 1 1], 'visible', 'off');
+% hTxt = text(0.5, 0.95, sprintf('Time from Saccade Offset: %d ms', tTicks(iTick)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 24);
 
 % cell responses as a function of time
 subplot(3,1,2); hold on; h = [];
@@ -220,6 +223,7 @@ end
 hTime1 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 legend(h, 'location', 'northeast');
 ylabel('Firing rate (s^{-1}');
+title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
 set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'lineWidth', 2, 'fontsize', 16, 'XColor', 'k', 'YColor', 'k');
 
 % eye trace
@@ -229,7 +233,6 @@ h(2) = plot(tTicks, egTrial.y.position(egTrial.saccadeOff + round(tTicks/1000*eg
 hTime2 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 xlabel('Time from saccade off (ms)');
 ylabel('Eye position (arcmin)');
-title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
 legend(h, 'location', 'east');
 set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
 
@@ -250,6 +253,7 @@ for(iTick = 1 : size(tTicks,2))
 	hTxt.String = sprintf('Time from Saccade Offset: %d ms', tTicks(iTick));
 	hTime1.XData(:) = tTicks(iTick);
 	hTime2.XData(:) = tTicks(iTick);
+	subplot(3,1,2); title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
 	drawnow;
 	writeVideo(writerObj, getframe(gcf));
 	pause;
