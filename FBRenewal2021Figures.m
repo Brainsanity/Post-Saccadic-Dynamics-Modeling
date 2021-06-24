@@ -240,7 +240,7 @@ set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'Font
 % generate movie
 saveFolder = '../../Manuscript/FB Renewal 2021';
 filename = fullfile(saveFolder, sprintf('Demo_Activity - SF=%d - iTrial=%d', 2, iTrial));
-writerObj = VideoWriter(filename, 'MPEG-4');
+writerObj = VideoWriter(filename);%, 'MPEG-4');
 open(writerObj);
 for(iTick = 1 : size(tTicks,2))
 
