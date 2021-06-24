@@ -250,7 +250,7 @@ for(iTick = 1 : size(tTicks,2))
 			hFR(k,iCell).FaceColor = colors(min(256, round(mean(fr{k}(iCell, iTick, iTrial), 3) / frMax(k) * 255) + 1), :);
 		end
 	end
-	hTxt.String = sprintf('Time from Saccade Offset: %d ms', tTicks(iTick));
+	% hTxt.String = sprintf('Time from Saccade Offset: %d ms', tTicks(iTick));
 	hTime1.XData(:) = tTicks(iTick);
 	hTime2.XData(:) = tTicks(iTick);
 	subplot(3,1,2); title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
