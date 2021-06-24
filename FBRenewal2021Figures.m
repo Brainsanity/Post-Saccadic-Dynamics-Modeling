@@ -189,7 +189,7 @@ frMax(:) = max(frMax);
 names = {'2 cpd', 'Absent', '10 cpd'};
 clear hFR;
 for(k = 1 : 3)
-	subplot(3,3,k); hold on;
+	axis('position', [0.4169+(k-2)*0.2691, 0.6055 0.1661 0.3804], 'nextplot', 'add');
 	colormap(gca, 'hot');
 	colors = colormap(gca);
 	iTick = 1;
@@ -206,14 +206,14 @@ for(k = 1 : 3)
 	% 	ylabel('Normalized Cell Response');
 	% end
 	axis equal;
-	set(gca, 'position', [0.4169+(k-2)*0.2691, 0.6055 0.1661 0.3804], 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
+	set(gca, 'xlim', cellXRange + eyeX, 'ylim', cellYRange, 'xtick', [], 'ytick', [], 'fontsize', 16, 'LineWidth', 2, 'color', 'k', 'XColor', 'k', 'YColor', 'k');
 	colorbar;
 end
 % axes('position', [0 0 1 1], 'visible', 'off');
 % hTxt = text(0.5, 0.95, sprintf('Time from Saccade Offset: %d ms', tTicks(iTick)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 24);
 
 % cell responses as a function of time
-subplot(3,1,2); hold on; h = [];
+axis('position', [0.1300 0.3282 0.7750 0.2157], 'nextplot', 'add'); h = [];
 colors2 = {[0.0745    0.6235    1.0000], 'k', [1.0000    0.4118    0.1608]};
 for(k = 1:3)
 	m = mean(fr{k}(:,:,iTrial), 1);
@@ -225,17 +225,17 @@ hTime1 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 legend(h, 'location', 'northeast');
 ylabel('Firing rate (s^{-1})');
 hTitle = title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
-set(gca, 'position', [0.1300 0.3282 0.7750 0.2157], 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'XTickLabel', [], 'lineWidth', 2, 'fontsize', 16, 'XColor', 'k', 'YColor', 'k');
+set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'XTickLabel', [], 'lineWidth', 2, 'fontsize', 16, 'XColor', 'k', 'YColor', 'k');
 
 % eye trace
-subplot(3, 1, 3); hold on; h = [];
+axis('position', [0.1300 0.0734 0.7750 0.2157], 'nextplot', 'add'); h = [];
 h(1) = plot(tTicks, egTrial.x.position(egTrial.saccadeOff + round(tTicks/1000*egTrial.sRate)), 'LineWidth', 2, 'displayname', 'Horizontal');
 h(2) = plot(tTicks, egTrial.y.position(egTrial.saccadeOff + round(tTicks/1000*egTrial.sRate)), 'LineWidth', 2, 'displayname', 'Vertical');
 hTime2 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 xlabel('Time from saccade off (ms)');
 ylabel('Eye position (arcmin)');
 legend(h, 'location', 'east');
-set(gca, 'position', [0.1300 0.0734 0.7750 0.2157], 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
+set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
 
 
 % generate movie
