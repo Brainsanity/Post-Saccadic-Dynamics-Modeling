@@ -224,7 +224,7 @@ end
 hTime1 = plot([1 1]*tTicks(iTick), ylim, 'k--', 'LineWidth', 2);
 legend(h, 'location', 'northeast');
 ylabel('Firing rate (s^{-1})');
-title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
+hTitle = title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
 set(gca, 'position', [0.1300 0.3282 0.7750 0.2157], 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'XTickLabel', [], 'lineWidth', 2, 'fontsize', 16, 'XColor', 'k', 'YColor', 'k');
 
 % eye trace
@@ -254,7 +254,7 @@ for(iTick = 1 : size(tTicks,2))
 	% hTxt.String = sprintf('Time from Saccade Offset: %d ms', tTicks(iTick));
 	hTime1.XData(:) = tTicks(iTick);
 	hTime2.XData(:) = tTicks(iTick);
-	subplot(3,1,2); title(sprintf('Eye Trace | t = %d ms', tTicks(iTick)));
+	hTitle.String = sprintf('Eye Trace | t = %d ms', tTicks(iTick));
 	drawnow;
 	writeVideo(writerObj, getframe(gcf));
 	pause;
