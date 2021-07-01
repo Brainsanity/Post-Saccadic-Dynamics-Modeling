@@ -2860,7 +2860,7 @@ classdef Encoder < handle
 
 
 		%% Video Demo: eye movements affect cell responses
-		function DemoActivity(saveFolder)
+		function DemoActivity(obj, saveFolder)
 
 			%%
 			figure('NumberTitle', 'off', 'name', 'Demo: P On cell Activity Map', 'color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
@@ -2874,7 +2874,7 @@ classdef Encoder < handle
 			cellYRange = [min(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 2)) - 0.2, max(obj.layers(iL).locations(obj.layers(iL).idxExampleCells{iEcc}, 2)) + 0.2];
 
 			trials = obj.activityParams.trials;
-			iTrial = 7;1;
+			iTrial = 39;7;1;
 			nTrials = size(trials,2);
 			egTrial = trials(iTrial);
 			tTicks = -150:600;	% aligned to saccade off

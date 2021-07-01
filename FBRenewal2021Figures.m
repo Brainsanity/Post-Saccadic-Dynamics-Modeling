@@ -6,12 +6,12 @@ sen2SD = shiftdim(SensitivitiesSTD(iL,1,:,:), 2)';
 sen10 = shiftdim(Sensitivities(iL,2,:,:), 2)';
 sen10SD = shiftdim(SensitivitiesSTD(iL,2,:,:), 2)';
 
-durs = durs+1; - 7;57;
-durs = [0 durs];
-sen2 = [ones(1,size(sen2,2))*eps; sen2];
-sen2SD = [ones(1,size(sen2SD,2))*eps; sen2SD];
-sen10 = [ones(1,size(sen10,2))*eps; sen10];
-sen10SD = [ones(1,size(sen10SD,2))*eps; sen10SD];
+% durs = durs+1; - 7;57;
+% durs = [0 durs];
+% sen2 = [ones(1,size(sen2,2))*eps; sen2];
+% sen2SD = [ones(1,size(sen2SD,2))*eps; sen2SD];
+% sen10 = [ones(1,size(sen10,2))*eps; sen10];
+% sen10SD = [ones(1,size(sen10SD,2))*eps; sen10SD];
 
 figure('color', 'w');
 colors = {'r', 'g', 'b', [1 0.5 0.5], [0.5 1 0.5], [0.5 0.5 1], [0.5 0 0], [0 0.5 0], [0 0 0.5]};
@@ -171,7 +171,7 @@ encoder.AddInternalNoise([], fullfile('../../Data/Simulated Activities', 'SacDB'
 %%
 trials = encoder.activityParams.trials;
 nTrials = size(trials,2);
-for(iTrial = randperm(nTrials, 20))
+for(iTrial = [273 158 102 281 156])%randperm(nTrials, 40))% [80 283 194 133 120 126])%)
 	figure('NumberTitle', 'off', 'name', sprintf('Demo: P On cell Activity Map - iTrial=%d', iTrial), 'color', 'w'); pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
 	iL = 1;
 	ecc = 0; 8;
@@ -251,6 +251,7 @@ for(iTrial = randperm(nTrials, 20))
 	legend(h, 'location', 'east');
 	set(gca, 'xlim', tTicks([1 end]) + [-10 10], 'ylim', ylim, 'LineWidth', 2, 'FontSize', 16, 'XColor', 'k', 'YColor', 'k');
 
+% 	continue;
 
 	% generate movie
 	saveFolder = '../../Manuscript/FB Renewal 2021/Videos';

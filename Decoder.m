@@ -105,7 +105,7 @@ classdef Decoder < handle
 			cellNumAmplifier =cat(1, obj.encoder.layers.nAllCells) ./ cat(1,obj.encoder.layers.nExampleCells);		% inverse of proportion of cells used
 			cellNumAmplifier(5,:) = mean(cellNumAmplifier,1);
 
-			for(iL = 1 : 5)
+			for(iL = 5)%1 : 5)
 				for(iSF = 1 : nSFs)
 					for(iEcc = 1 : nEccs)
 						fprintf('iL = %d, SF = %d, Ecc = %d...\n', iL, SFs(iSF), Eccs(iEcc));
@@ -126,7 +126,7 @@ classdef Decoder < handle
 							if(iTick == 1), tic; end
 							fprintf('\tduration = %d...\n', tTicks(iTick));
 
-							if(tTicks(iTick) == 0)		% 0 duration
+							if(tTicks(iTick) <= 0)		% 0 duration
 								Thresholds(:,:,:,iTick) = Inf;
 								ThresholdsSTD(:,:,:,iTick) = Inf;
 								Sensitivities(:,:,:,iTick) = eps;
@@ -140,7 +140,7 @@ classdef Decoder < handle
 
 							Y1_ = lfrPresent(:, 1 : tTicks(iTick), :);
 
-							if(iTick == 1)
+							if(iTick == find(tTicks > 0, 1, 'first'))
 								c = ones(1, nBoots) * 0.5;	% initial contrast
 							else
 								c = ones(1, nBoots) * Thresholds(iL,iSF,iEcc,iTick-1);
