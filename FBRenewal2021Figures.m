@@ -313,7 +313,7 @@ for(isNorm2End = [true false])
 			locIdx = temporalEccDegs <= 14;
 
 			% plot cell locations
-			figure('numbertitle', 'off', 'name', sprintf('Dynamics of Sensitivity Map - isNorm2End=%d - isEqualAxis=%d - isLog=%d', isNorm2End, isEqualAxis, isLog), 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
+			figure('numbertitle', 'off', 'name', sprintf('Temporal Equivalent Locations of Cells'), 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
 			hold on;
 			plot(X(locIdx), Y(locIdx), 'bo', 'linewidth', 2, 'displayname', 'original');
 			plot(X(locIdx)./(eps+sqrt(X(locIdx).^2+Y(locIdx).^2)).*temporalEccDegs(locIdx), Y(locIdx)./(eps+sqrt(X(locIdx).^2+Y(locIdx).^2)).*temporalEccDegs(locIdx), 'rx', 'linewidth', 2, 'displayname', 'temporal equivalence');
@@ -328,7 +328,7 @@ for(isNorm2End = [true false])
 			writerObj = VideoWriter(filename, 'MPEG-4');
 			% writerObj.FrameRate = 15;
 			open(writerObj);
-			figure('numbertitle', 'off', 'name', 'Movie Showing Dynamics of Sensitivity Maps', 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
+			figure('numbertitle', 'off', 'name', sprintf('Movie Showing Dynamics of Sensitivity Maps - isNorm2End=%d - isEqualAxis=%d - isLog=%d', isNorm2End, isEqualAxis, isLog), 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
 			clear h;
 			tTicks = 0 : durs(end);
 			clear data;
@@ -361,9 +361,9 @@ for(isNorm2End = [true false])
 					end
 					hBar.FontSize = 20;
 					if(isEqualAxis)
-						caxis([min([data{1}(:); data{2}(:)]), max([data{1}(:); data{2}(:)])]);
+						caxis([min(reshape([data{1}(2:end,:); data{2}(2:end,:)], 1, [])), max([data{1}(:); data{2}(:)])]);
 					else
-						caxis([min(data{iSF}(:)), max(data{iSF}(:))]);
+						caxis([min(reshape([data{1}(2:end,:); data{2}(2:end,:)], 1, [])), max(data{iSF}(:))]);
 					end
 					colormap('hot');
 					title(sprintf('SF = %d', SFs(iSF)));
