@@ -296,85 +296,91 @@ imshow((1.2*noise(yIdx,xIdx) + 0.8*grating10(yIdx,xIdx)) * 0.25 + 0.5);
 
 
 %% video showing dynamics of the sensitivity maps across the visual field out of linear interpolation
-% isNorm2End = true;
-isNorm2End = false
-isEqualAxis = true;
-% isEqualAxis = false;
-isLog = true;
-% isLog = false;
+for(isNorm2End = [true false])
+	for(isEqualAxis = [true false])
+		for(isLog = [true false])
 
-[X, Y] = meshgrid(-14:14, -14:14);
-ecc_ = 0:0.1:20;
-names = {'POn', 'POff', 'MOn', 'MOff'};
-density_ = 0;
-density = 0;
-for(k = 1:4)
-	density_ = density_ + WatsonRGCModel.RFSpacingDensityMeridian( ecc_, WatsonRGCModel.enumeratedMeridianNames{1}, names{k} );   % temporal meridian
-	density = density + WatsonRGCModel.RFSpacingDensity([X(:), Y(:)], names{k});
-end
-temporalEccDegs = interp1( density_, ecc_, density, 'linear', 'extrap' );
-locIdx = temporalEccDegs <= 14;
+			[X, Y] = meshgrid(-14:14, -14:14);
+			ecc_ = 0:0.1:20;
+			names = {'POn', 'POff', 'MOn', 'MOff'};
+			density_ = 0;
+			density = 0;
+			for(k = 1:4)
+				density_ = density_ + WatsonRGCModel.RFSpacingDensityMeridian( ecc_, WatsonRGCModel.enumeratedMeridianNames{1}, names{k} );   % temporal meridian
+				density = density + WatsonRGCModel.RFSpacingDensity([X(:), Y(:)], names{k});
+			end
+			temporalEccDegs = interp1( density_, ecc_, density, 'linear', 'extrap' );
+			locIdx = temporalEccDegs <= 14;
 
-% plot cell locations
-figure('numbertitle', 'off', 'name', sprintf('Dynamics of Sensitivity Map - isNorm2End=%d - isEqualAxis=%d - isLog=%d', isNorm2End, isEqualAxis, isLog), 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
-hold on;
-plot(X(locIdx), Y(locIdx), 'bo', 'linewidth', 2, 'displayname', 'original');
-plot(X(locIdx)./(eps+sqrt(X(locIdx).^2+Y(locIdx).^2)).*temporalEccDegs(locIdx), Y(locIdx)./(eps+sqrt(X(locIdx).^2+Y(locIdx).^2)).*temporalEccDegs(locIdx), 'rx', 'linewidth', 2, 'displayname', 'temporal equivalence');
-xlabel('Horizontal position (\circ)');
-xlabel('Vertical position (\circ)');
-legend('location', 'northeastoutside');
-axis equal;
-set(gca, 'fontsize', 20, 'linewidth', 2);
+			% plot cell locations
+			figure('numbertitle', 'off', 'name', sprintf('Dynamics of Sensitivity Map - isNorm2End=%d - isEqualAxis=%d - isLog=%d', isNorm2End, isEqualAxis, isLog), 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
+			hold on;
+			plot(X(locIdx), Y(locIdx), 'bo', 'linewidth', 2, 'displayname', 'original');
+			plot(X(locIdx)./(eps+sqrt(X(locIdx).^2+Y(locIdx).^2)).*temporalEccDegs(locIdx), Y(locIdx)./(eps+sqrt(X(locIdx).^2+Y(locIdx).^2)).*temporalEccDegs(locIdx), 'rx', 'linewidth', 2, 'displayname', 'temporal equivalence');
+			xlabel('Horizontal position (\circ)');
+			xlabel('Vertical position (\circ)');
+			legend('location', 'northeastoutside');
+			axis equal;
+			set(gca, 'fontsize', 20, 'linewidth', 2);
 
-% generate movie of dynamics of sensitivity map
-filename = fullfile('../../Manuscript/FB Renewal 2021/Videos', sprintf('Dynamics of Sensitivity Map - isNorm2End=%d - isEqualAxis=%d - isLog=%d', isNorm2End, isEqualAxis, isLog));
-writerObj = VideoWriter(filename, 'MPEG-4');
-% writerObj.FrameRate = 15;
-open(writerObj);
-figure('numbertitle', 'off', 'name', 'Movie Showing Dynamics of Sensitivity Maps', 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
-clear h;
-tTicks = 0 : durs(end);
-clear data;
-for(k = 1 : size(sen2,2))
-	data{1}(:,k) = interp1(durs, sen2(:,k), tTicks, 'linear');
-	data{2}(:,k) = interp1(durs, sen10(:,k), tTicks, 'linear');
-end
-if(isNorm2End)
-	data = {data{1} ./ data{1}(end,:), data{2} ./ data{2}(end,:)};
-end
-SFs = [2 10];
-for(iTick = 1 : size(tTicks, 2))
-	for(iSF = 1 : 2)
-		senMap = ones(size(X)) * eps;
-		senMap(locIdx) = interp1(unique([conditions.eccentricity]), data{iSF}(iTick,:), temporalEccDegs(locIdx), 'linear');
-		if(isLog)
-			senMap = log10(senMap);
+			% generate movie of dynamics of sensitivity map
+			filename = fullfile('../../Manuscript/FB Renewal 2021/Videos', sprintf('Dynamics of Sensitivity Map - isNorm2End=%d - isEqualAxis=%d - isLog=%d', isNorm2End, isEqualAxis, isLog));
+			writerObj = VideoWriter(filename, 'MPEG-4');
+			% writerObj.FrameRate = 15;
+			open(writerObj);
+			figure('numbertitle', 'off', 'name', 'Movie Showing Dynamics of Sensitivity Maps', 'color', 'w');  pause(0.1); jf = get(handle(gcf),'javaframe'); jf.setMaximized(1); pause(1);
+			clear h;
+			tTicks = 0 : durs(end);
+			clear data;
+			for(k = 1 : size(sen2,2))
+				data{1}(:,k) = interp1(durs, sen2(:,k), tTicks, 'linear');
+				data{2}(:,k) = interp1(durs, sen10(:,k), tTicks, 'linear');
+			end
+			if(isNorm2End)
+				data = {data{1} ./ data{1}(end,:), data{2} ./ data{2}(end,:)};
+			end
+			if(isLog)
+				data = {log10(data{1}), log10(data{2})};
+			end
+			SFs = [2 10];
+			for(iTick = 1 : size(tTicks, 2))
+				for(iSF = 1 : 2)
+					senMap = ones(size(X)) * eps;
+					senMap(locIdx) = interp1(unique([conditions.eccentricity]), data{iSF}(iTick,:), temporalEccDegs(locIdx), 'linear');
+
+					subplot(1,2,iSF);
+					[~, h(iSF)] = contour( -14:14, -14:14, senMap, 100, 'LineStyle', 'none', 'fill', 'on' );
+			        h = handle(h);
+					hBar = colorbar;
+					hBar.Label.String = 'Sensitivity';
+					if(isLog)
+						hBar.Label.String = ['Log ' hBar.Label.String];
+					end
+					if(isNorm2End)
+						hBar.Label.String = ['Normalized ' hBar.Label.String];
+					end
+					hBar.FontSize = 20;
+					if(isEqualAxis)
+						caxis([min([data{1}(:); data{2}(:)]), max([data{1}(:); data{2}(:)])]);
+					else
+						caxis([min(data{iSF}(:)), max(data{iSF}(:))]);
+					end
+					colormap('hot');
+					title(sprintf('SF = %d', SFs(iSF)));
+					xlabel('Horizontal position (\circ)');
+					ylabel('Vertical position (\circ)');
+					axis equal;
+					set(gca, 'FontSize', 20, 'lineWidth', 2, 'color', 'k');
+				end
+				axes('position', [0 0 1 1], 'visible', 'off');
+				hTxt = text(0.5, 0.9, sprintf('Post-Saccade Exposure: %d ms', tTicks(iTick)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 24);
+			    drawnow;
+				writeVideo(writerObj, getframe(gcf));
+			end
+			close(writerObj);
 		end
-
-		subplot(1,2,iSF);
-		[~, h(iSF)] = contour( -14:14, -14:14, senMap, 100, 'LineStyle', 'none', 'fill', 'on' );
-        h = handle(h);
-		hBar = colorbar;
-		hBar.Label.String = 'Sensitivity';
-		hBar.FontSize = 20;
-		if(isEqualAxis)
-			caxis([min([data{1}(:); data{2}(:)]), max([data{1}(:); data{2}(:)])]);
-		else
-			caxis([min(data{iSF}(:)), max(data{iSF}(:))]);
-		end
-		colormap('hot');
-		title(sprintf('SF = %d', SFs(iSF)));
-		xlabel('Horizontal position (\circ)');
-		ylabel('Vertical position (\circ)');
-		axis equal;
-		set(gca, 'FontSize', 20, 'lineWidth', 2, 'color', 'k');
 	end
-	axes('position', [0 0 1 1], 'visible', 'off');
-	hTxt = text(0.5, 0.9, sprintf('Post-Saccade Exposure: %d ms', tTicks(iTick)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontSize', 24);
-    drawnow;
-	writeVideo(writerObj, getframe(gcf));
 end
-close(writerObj);
 
 
 
