@@ -296,7 +296,7 @@ imshow((1.2*noise(yIdx,xIdx) + 0.8*grating10(yIdx,xIdx)) * 0.25 + 0.5);
 
 
 %% video showing dynamics of the sensitivity maps across the visual field out of linear interpolation
-for(isNorm2End = [true false])
+for(isNorm2End = [false true])
 	for(isEqualAxis = [true false])
 		for(isLog = [true false])
 
