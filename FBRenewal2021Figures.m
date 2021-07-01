@@ -346,6 +346,9 @@ for(isNorm2End = [false true])
 			for(iTick = 1 : size(tTicks, 2))
 				for(iSF = 1 : 2)
 					senMap = ones(size(X)) * eps;
+					if(isLog)
+						senMap = log10(senMap);
+					end
 					senMap(locIdx) = interp1(unique([conditions.eccentricity]), data{iSF}(iTick,:), temporalEccDegs(locIdx), 'linear');
 
 					subplot(1,2,iSF);
