@@ -105,7 +105,7 @@ if true
 			for(iEcc = size(Eccs,2) : -1 : 1)
 				fr = cat(1, max(0, encoder.ExampleCellsActivitiesOnCondition(encoder.layers((k-1)*2+1).name, Eccs(iEcc), SFs(iSF), 0.5, alignEvent, t([1 end]), true, withInternalNoise)), ...
 						    max(0, encoder.ExampleCellsActivitiesOnCondition(encoder.layers((k-1)*2+2).name, Eccs(iEcc), SFs(iSF), 0.5, alignEvent, t([1 end]), true, withInternalNoise)));
-				popFR{k}{iSF} = mean(mean(fr, 1), 3);
+				popFR{k}{iSF}(iEcc,:) = mean(mean(fr, 1), 3);
 			end
 		end
 	end
@@ -114,3 +114,5 @@ if true
 end
 
 load('../../Data/Simulated Activities/SacDB/UG - Noise & Grating Simulated Separately/figures - withInternalNoise/uni-no_bias-fa25_hit75 - durOffset=0/PopFR.mat', 'popFR', 'tPopFR');
+
+
