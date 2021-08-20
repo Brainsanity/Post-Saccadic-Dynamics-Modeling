@@ -76,8 +76,6 @@ if true
             qua25 = prctile(fr, 25, 3);
             qua75 = prctile(fr, 75, 3);
 
-            popFR
-
             if(any(iEcc == 1:3))
 	            fill( [t, t(end:-1:1)], [m-sem, m(end:-1:1)+sem(end:-1:1)], colors{iEcc}, 'LineStyle', 'none', 'FaceAlpha', 0.2 );
 				h(iEcc) = plot( t, m, '-', 'color', colors{iEcc}, 'lineWidth', 2, 'displayName', sprintf('Grating ecc=%d', Eccs(iEcc)) );
