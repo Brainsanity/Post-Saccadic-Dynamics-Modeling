@@ -97,7 +97,11 @@ classdef Encoder < handle
 				end
 				load(loadFolder);
 				frBG = max(0, cat(1, LFR{[obj.activityParams.conditions.sf] == 0, :}));
-				obj.activityParams.internalNoise = mean(mean(mean(frBG(:, end-199:end, :), 3), 2), 1) / 3;		% 1/3 of the external noise acitivity
+				% obj.activityParams.internalNoise = mean(mean(mean(frBG(:, end-199:end, :), 3), 2), 1) / 3;		% 1/3 of the external noise acitivity
+				obj.activityParams.internalNoise = mean(frBG(:, end-199:end, :), 3);		% 1/3 of the external noise acitivity
+				obj.activityParams.internalNoise = mean(obj.activityParams.internalNoise, 2);
+				obj.activityParams.internalNoise = mean(obj.activityParams.internalNoise, 1);
+				obj.activityParams.internalNoise = obj.activityParams.internalNoise / 3;
 			end
 
 			% if(strcmpi(cellType, 'all'))
