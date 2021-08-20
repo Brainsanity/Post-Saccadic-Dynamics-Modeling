@@ -1,5 +1,5 @@
 %%
-load('F:/Post Saccadic Dynamics Modeling/Data/Simulated Activities/SacDB/UG - Noise & Grating Simulated Separately/figures - withInternalNoise/uni-no_bias-fa25_hit75 - durOffset=0/PerformanceData.mat');
+load('../../Data/Simulated Activities/SacDB/UG - Noise & Grating Simulated Separately/figures - withInternalNoise/uni-no_bias-fa25_hit75 - durOffset=0/PerformanceData.mat');
 iL = 5;
 sen2 = shiftdim(Sensitivities(iL,1,:,:), 2)';
 sen2SD = shiftdim(SensitivitiesSTD(iL,1,:,:), 2)';
@@ -384,6 +384,9 @@ for(isNorm2End = [false true])
 		end
 	end
 end
+
+
+
 
 
 
