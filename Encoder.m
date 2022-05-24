@@ -1184,7 +1184,7 @@ classdef Encoder < handle
 			end
 
 			if(~exist('durOffset', 'var') || isempty(durOffset))
-				durOffset = 50+7;			% resonse delay of 50 ms + online saccade off later by 7 ms
+				durOffset = 50+7;			% response delay of 50 ms + online saccade off later by 7 ms
 			end
 
 			if(isempty(obj.activityParams))

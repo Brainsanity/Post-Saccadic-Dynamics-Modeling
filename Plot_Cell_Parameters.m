@@ -48,7 +48,7 @@ for(k = 1:4)
 	x = x(NL+1:end-NL);
 	y = y(NL+1:end-NL);
 	x2 = x2(NL+1:end-NL);
-	sd = x2 - x.^2;
+	sd = sqrt(x2 - x.^2);
 	h(end+1) = plot(x, y, '-', 'color', colors{k}, 'linewidth', 2, 'displayname', [obj.layers(k).name ' center']);
 	fill([x x(end:-1:1)], [y-sd y(end:-1:1)+sd(end:-1:1)], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 
@@ -67,7 +67,7 @@ for(k = 1:4)
 	x = x(NL+1:end-NL);
 	y = y(NL+1:end-NL);
 	x2 = x2(NL+1:end-NL);
-	sd = x2 - x.^2;
+	sd = sqrt(x2 - x.^2);
 	h(end+1) = plot(x, y, '--', 'color', colors{k}, 'linewidth', 2, 'displayname', [obj.layers(k).name ' surround']);
 	fill([x x(end:-1:1)], [y-sd y(end:-1:1)+sd(end:-1:1)], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 end
@@ -100,7 +100,7 @@ for(k = 1:4)
 	x = x(NL+1:end-NL);
 	y = y(NL+1:end-NL);
 	x2 = x2(NL+1:end-NL);
-	sd = x2 - x.^2;
+	sd = sqrt(x2 - x.^2);
 	plot(x, y, '-', 'color', colors{k}, 'linewidth', 2, 'displayname', [obj.layers(k).name ' center']);
 	fill([x x(end:-1:1)], [y-sd y(end:-1:1)+sd(end:-1:1)], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 
@@ -120,7 +120,7 @@ for(k = 1:4)
 	x = x(NL+1:end-NL);
 	y = y(NL+1:end-NL);
 	x2 = x2(NL+1:end-NL);
-	sd = x2 - x.^2;
+	sd = sqrt(x2 - x.^2);
 	plot(x, y, '--', 'color', colors{k}, 'linewidth', 2, 'displayname', [obj.layers(k).name ' surround']);
 	fill([x x(end:-1:1)], [y-sd y(end:-1:1)+sd(end:-1:1)], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 end

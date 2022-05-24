@@ -6,18 +6,18 @@ sen2SD = shiftdim(SensitivitiesSTD(iL,1,:,:), 2)';
 sen10 = shiftdim(Sensitivities(iL,2,:,:), 2)';
 sen10SD = shiftdim(SensitivitiesSTD(iL,2,:,:), 2)';
 
-% durs = durs+1; - 7;57;
-% durs = [0 durs];
-% sen2 = [ones(1,size(sen2,2))*eps; sen2];
-% sen2SD = [ones(1,size(sen2SD,2))*eps; sen2SD];
-% sen10 = [ones(1,size(sen10,2))*eps; sen10];
-% sen10SD = [ones(1,size(sen10SD,2))*eps; sen10SD];
+durs = durs- 7;+1; 57;
+durs = [0 durs];
+sen2 = [ones(1,size(sen2,2))*eps; sen2];
+sen2SD = [ones(1,size(sen2SD,2))*eps; sen2SD];
+sen10 = [ones(1,size(sen10,2))*eps; sen10];
+sen10SD = [ones(1,size(sen10SD,2))*eps; sen10SD];
 
 figure('color', 'w');
 colors = {'r', 'g', 'b', [1 0.5 0.5], [0.5 1 0.5], [0.5 0.5 1], [0.5 0 0], [0 0.5 0], [0 0 0.5]};
 subplot(2,2,1); hold on;
 for(k = [1:8])
-	fill([durs, fliplr(durs)], [sen2(:,k) - sen2SD(:,k); flipud(sen2(:,k) + sen2SD(:,k))], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
+	fill([durs, fliplr(durs)], max(eps, [sen2(:,k) - sen2SD(:,k); flipud(sen2(:,k) + sen2SD(:,k))]), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 	plot(durs, sen2(:,k), 'color', colors{k}, 'LineWidth', 2, 'DisplayName', sprintf('Ecc = %d', k*2-2));
 end
 ylabel('Sensitivity');
@@ -28,7 +28,7 @@ YLim1 = ylim;
 
 subplot(2,2,2); hold on;
 for(k = [1:8])
-	fill([durs, fliplr(durs)], [sen10(:,k) - sen10SD(:,k); flipud(sen10(:,k) + sen10SD(:,k))], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
+	fill([durs, fliplr(durs)], max(eps, [sen10(:,k) - sen10SD(:,k); flipud(sen10(:,k) + sen10SD(:,k))]), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 	plot(durs, sen10(:,k), 'color', colors{k}, 'LineWidth', 2, 'DisplayName', sprintf('Ecc = %d', k*2-2));
 end
 ylabel('Sensitivity');
@@ -39,7 +39,7 @@ YLim2 = ylim;
 
 subplot(2,2,3); hold on;
 for(k = [1:8])
-	fill([durs, fliplr(durs)], [sen2(:,k) - sen2SD(:,k); flipud(sen2(:,k) + sen2SD(:,k))] ./ sen2(end,k), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
+	fill([durs, fliplr(durs)], max(eps, [sen2(:,k) - sen2SD(:,k); flipud(sen2(:,k) + sen2SD(:,k))]) ./ sen2(end,k), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 	plot(durs, sen2(:,k) ./ sen2(end,k), 'color', colors{k}, 'LineWidth', 2, 'DisplayName', sprintf('Ecc = %d', k*2-2));
 end
 ylabel('Sensitivity');
@@ -49,7 +49,7 @@ ylim([0.1 1.3]);
 
 subplot(2,2,4); hold on; h = [];
 for(k = [1:8])
-	fill([durs, fliplr(durs)], [sen10(:,k) - sen10SD(:,k); flipud(sen10(:,k) + sen10SD(:,k))] ./ sen10(end,k), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
+	fill([durs, fliplr(durs)], max(eps, [sen10(:,k) - sen10SD(:,k); flipud(sen10(:,k) + sen10SD(:,k))]) ./ sen10(end,k), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 	h(k) = plot(durs, sen10(:,k) ./ sen10(end,k), 'color', colors{k}, 'LineWidth', 2, 'DisplayName', sprintf('Ecc = %d', k*2-2));
 end
 ylabel('Sensitivity');
@@ -69,7 +69,7 @@ h = [];
 axes( 'Position', [0.17+0.33*(iSF-1), 0.35, 0.2620, 0.9/2-0.04], ...
 	  'xlim', [-25 525], 'xtick', 0:150:500, 'ylim', [0.7 10], 'ytick', [1 2 4 8], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
 for(k = [1:8])
-	fill([durs(tIdx), fliplr(durs(tIdx))], [sen2(tIdx,k) - sen2SD(tIdx,k); flipud(sen2(tIdx,k) + sen2SD(tIdx,k))], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
+	fill([durs(tIdx), fliplr(durs(tIdx))], max(eps, [sen2(tIdx,k) - sen2SD(tIdx,k); flipud(sen2(tIdx,k) + sen2SD(tIdx,k))]), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 	h(k) = plot(durs(tIdx), sen2(tIdx,k), 'color', colors{k}, 'LineWidth', 2, 'DisplayName', sprintf('Ecc = %d', k*2-2));
 end
 ylabel('Sensitivity');
@@ -81,7 +81,7 @@ iSF = 2;
 axes( 'Position', [0.17+0.33*(iSF-1), 0.35, 0.2620, 0.9/2-0.04], ...
 	  'xlim', [-25 525], 'xtick', 0:150:500, 'ylim', [0.7 10], 'ytick', [1 2 4 8], 'YScale', 'log', 'fontsize', 30, 'LineWidth', 2, 'nextplot', 'add', 'XColor', 'k', 'YColor', 'k' );
 for(k = [1:8])
-	fill([durs(tIdx), fliplr(durs(tIdx))], [sen10(tIdx,k) - sen10SD(tIdx,k); flipud(sen10(tIdx,k) + sen10SD(tIdx,k))], 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
+	fill([durs(tIdx), fliplr(durs(tIdx))], max(eps, [sen10(tIdx,k) - sen10SD(tIdx,k); flipud(sen10(tIdx,k) + sen10SD(tIdx,k))]), 'k', 'LineStyle', 'none', 'FaceColor', colors{k}, 'FaceAlpha', 0.5);
 	plot(durs(tIdx), sen10(tIdx,k), 'color', colors{k}, 'LineWidth', 2, 'DisplayName', sprintf('Ecc = %d', k*2-2));
 end
 ylabel('Sensitivity');
